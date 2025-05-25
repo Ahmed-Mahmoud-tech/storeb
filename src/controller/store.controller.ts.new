@@ -1,0 +1,411 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseInterceptors,
+  UploadedFiles,
+  HttpStatus,
+  HttpException,
+  BadRequestException,
+  OnModuleInit,
+  Patch,
+} from '@nestjs/common';
+import { StoreService } from '../services/store.service';
+import { FileUploadService } from '../services/file-upload.service';
+import { CreateStoreDto } from '../dto/store.dto';
+import { CreateBranchDto } from '../dto/branch.dto';
+import { Store } from '../model/store.model';
+import { Branch } from '../model/branches.model';
+import { createFileFieldsInterceptor } from '../interceptors/file-upload.interceptor';
+import { FormDataParserInterceptor } from '../interceptors/form-data-parser.interceptor';
+import { FormDataHelper } from '../utils/form-data.helper';
+
+@Controller('stores')
+export class StoreController implements OnModuleInit {
+  constructor(
+    private readonly storeService: StoreService,
+    private readonly fileUploadService: FileUploadService
+  ) {}
+
+  onModuleInit() {
+    // Ensure upload directories exist when the application starts
+    this.fileUploadService.ensureUploadDirectories();
+  }
+
+  /**
+   * Create a new store with optional branches
+   *
+   * POST /stores
+   *
+   * @example
+   * {
+   *   "userId": "3a9fda4b-9068-4a7f-99bc-a7b927981c67",
+   *   "storeName": "Fashion Store",
+   *   "themeColor": "#3B82F6",
+   *   "phoneNumber": "+1234567890",
+   *   "hasDelivery": true,
+   *   "storeTypes": ["men", "women"],
+   *   "branches": [...]
+   * }
+   *
+   * Note: logo and banner should be sent as form-data files
+   */
+  @Post()
+  @UseInterceptors(
+    FormDataParserInterceptor,
+    createFileFieldsInterceptor([
+      { name: 'logo', maxCount: 1 },
+      { name: 'banner', maxCount: 1 },
+    ])
+  )
+  async createStore(
+    @Body() dto: Record<string, unknown>,
+    @UploadedFiles()
+    files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] }
+  ): Promise<Store> {
+    try {
+      console.log('Received raw form data:', JSON.stringify(dto, null, 2));
+
+      // Create a type-safe DTO object
+      const createStoreDto = new CreateStoreDto();
+
+      // Basic string properties
+      createStoreDto.storeName = dto.storeName as string;
+      createStoreDto.ownerId =
+        (dto.ownerId as string) || '3a9fda4b-9068-4a7f-99bc-a7b927981c67';
+      createStoreDto.logo = dto.logo as string;
+      createStoreDto.banner = dto.banner as string;
+      createStoreDto.themeColor = dto.themeColor as string;
+      createStoreDto.phoneNumber = dto.phoneNumber as string;
+
+      // Complex properties that need parsing
+      createStoreDto.storeTypes = FormDataHelper.parseIfJSON<string[]>(
+        dto.storeTypes,
+        []
+      );
+      createStoreDto.hasDelivery = FormDataHelper.parseBoolean(dto.hasDelivery);
+      createStoreDto.branches = FormDataHelper.parseIfJSON<CreateBranchDto[]>(
+        dto.branches,
+        []
+      );
+
+      console.log('Parsed form data:', JSON.stringify(createStoreDto, null, 2));
+
+      // Ensure uploads directories exist
+      this.fileUploadService.ensureUploadDirectories();
+
+      // Handle logo file if uploaded
+      if (files?.logo && files.logo.length > 0) {
+        console.log('Processing logo file:', files.logo[0].originalname);
+        console.log('Logo file details:', {
+          path: files.logo[0].path,
+          size: files.logo[0].size,
+          mimetype: files.logo[0].mimetype,
+        });
+        const logoPath = await this.fileUploadService.validateAndProcessUpload(
+          files.logo[0],
+          {
+            width: 600, // smaller width for logo
+            quality: 85, // slightly higher quality for logo
+            format: 'webp', // WebP for better compression with good quality
+          }
+        );
+        // Store the path string to the DTO
+        createStoreDto.logo = logoPath || undefined;
+        console.log('Logo path after processing:', createStoreDto.logo);
+      } else if (
+        createStoreDto.logo &&
+        typeof createStoreDto.logo !== 'string'
+      ) {
+        // If logo exists in DTO but is not a string, it's invalid
+        throw new BadRequestException(
+          'Logo must be a valid image file or a string path'
+        );
+      }
+
+      // Handle banner file if uploaded
+      if (files?.banner && files.banner.length > 0) {
+        console.log('Processing banner file:', files.banner[0].originalname);
+        const bannerPath =
+          await this.fileUploadService.validateAndProcessUpload(
+            files.banner[0],
+            {
+              width: 1200, // wider for banner image
+              height: 400, // optional height constraint for banner
+              quality: 80,
+              format: 'webp',
+            }
+          );
+        // Store the path string to the DTO
+        createStoreDto.banner = bannerPath || undefined;
+        console.log('Banner path after processing:', createStoreDto.banner);
+      } else if (
+        createStoreDto.banner &&
+        typeof createStoreDto.banner !== 'string'
+      ) {
+        // If banner exists in DTO but is not a string, it's invalid
+        throw new BadRequestException(
+          'Banner must be a valid image file or a string path'
+        );
+      }
+
+      // Log the values being sent to the service
+      console.log('Creating store with logo:', createStoreDto.logo);
+      console.log('Creating store with banner:', createStoreDto.banner);
+
+      // Create the store with processed image paths
+      return await this.storeService.createStore(createStoreDto);
+    } catch (error) {
+      // Preserve BadRequestException errors
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // Log the error for debugging
+      console.error('Error in store creation:', error);
+
+      // Extract error message if possible
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'message' in error
+          ? (error as { message?: string }).message
+          : undefined;
+
+      // Return a standardized error
+      throw new HttpException(
+        errorMessage || 'Error processing store images',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Add a new branch to an existing store
+   *
+   * POST /stores/:storeId/branches
+   *
+   * @example
+   * {
+   *   "name": "New Branch",
+   *   "coordinates": {
+   *     "lat": 31.9816,
+   *     "lng": 35.8969,
+   *     "address": "456 High St, Uptown"
+   *   },
+   *   "supportNumbers": [
+   *     {
+   *       "phone": "+1888999000",
+   *       "whatsapp": true
+   *     }
+   *   ]
+   * }
+   */
+  @Post(':storeId/branches')
+  async createBranch(
+    @Param('storeId') storeId: string,
+    @Body() createBranchDto: CreateBranchDto
+  ): Promise<Branch> {
+    return this.storeService.createBranchForStore(storeId, createBranchDto);
+  }
+
+  /**
+   * Get all stores
+   *
+   * GET /stores
+   */
+  @Get()
+  async getAllStores(): Promise<Store[]> {
+    return this.storeService.findAllStores();
+  }
+
+  /**
+   * Get a store by ID
+   *
+   * GET /stores/:id
+   */
+  @Get(':id')
+  async getStoreById(@Param('id') id: string): Promise<Store> {
+    return this.storeService.findStoreById(id);
+  }
+
+  /**
+   * Update a store
+   *
+   * PUT /stores/:id
+   */
+  @Put(':id')
+  @UseInterceptors(
+    FormDataParserInterceptor,
+    createFileFieldsInterceptor([
+      { name: 'logo', maxCount: 1 },
+      { name: 'banner', maxCount: 1 },
+    ])
+  )
+  async updateStore(
+    @Param('id') id: string,
+    @Body() dto: Record<string, unknown>,
+    @UploadedFiles()
+    files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] }
+  ): Promise<Store> {
+    try {
+      console.log('Received raw update data:', JSON.stringify(dto, null, 2));
+
+      // Create a partial DTO object for updating
+      const updateStoreDto: Partial<CreateStoreDto> = {};
+
+      // Only set properties that are provided
+      if (dto.storeName) {
+        updateStoreDto.storeName = dto.storeName as string;
+      }
+      
+      if (dto.themeColor) {
+        updateStoreDto.themeColor = dto.themeColor as string;
+      }
+      
+      if (dto.phoneNumber) {
+        updateStoreDto.phoneNumber = dto.phoneNumber as string;
+      }
+      
+      if (dto.hasDelivery !== undefined) {
+        updateStoreDto.hasDelivery = FormDataHelper.parseBoolean(
+          dto.hasDelivery
+        );
+      }
+      
+      if (dto.storeTypes) {
+        updateStoreDto.storeTypes = FormDataHelper.parseIfJSON<string[]>(
+          dto.storeTypes,
+          []
+        );
+      }
+      
+      // Process logo if provided
+      if (files?.logo && files.logo.length > 0) {
+        const logoPath = await this.fileUploadService.validateAndProcessUpload(
+          files.logo[0],
+          {
+            width: 600,
+            quality: 85,
+            format: 'webp',
+          }
+        );
+        updateStoreDto.logo = logoPath || undefined;
+      } else if (dto.logo !== undefined) {
+        updateStoreDto.logo = dto.logo as string;
+      }
+
+      // Process banner if provided
+      if (files?.banner && files.banner.length > 0) {
+        const bannerPath = await this.fileUploadService.validateAndProcessUpload(
+          files.banner[0],
+          {
+            width: 1200,
+            height: 400,
+            quality: 80,
+            format: 'webp',
+          }
+        );
+        updateStoreDto.banner = bannerPath || undefined;
+      } else if (dto.banner !== undefined) {
+        updateStoreDto.banner = dto.banner as string;
+      }
+
+      // Update the store
+      return await this.storeService.updateStore(id, updateStoreDto);
+    } catch (error) {
+      console.error('Error updating store:', error);
+      
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      // Extract error message if possible
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'message' in error
+          ? (error as { message?: string }).message
+          : undefined;
+
+      throw new HttpException(
+        errorMessage || 'Error updating store',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Delete a store
+   *
+   * DELETE /stores/:id
+   */
+  @Delete(':id')
+  async deleteStore(@Param('id') id: string): Promise<{ message: string }> {
+    await this.storeService.deleteStore(id);
+    return { message: `Store with ID ${id} deleted successfully` };
+  }
+
+  /**
+   * Get all branches of a store
+   *
+   * GET /stores/:storeId/branches
+   */
+  @Get(':storeId/branches')
+  async getBranchesByStoreId(
+    @Param('storeId') storeId: string
+  ): Promise<Branch[]> {
+    return this.storeService.findAllBranchesByStoreId(storeId);
+  }
+
+  /**
+   * Get a specific branch
+   *
+   * GET /stores/branches/:branchId
+   */
+  @Get('branches/:branchId')
+  async getBranchById(
+    @Param('branchId') branchId: string
+  ): Promise<Branch> {
+    return this.storeService.findBranchById(branchId);
+  }
+
+  /**
+   * Update a branch
+   *
+   * PUT /stores/branches/:branchId
+   */
+  @Put('branches/:branchId')
+  async updateBranch(
+    @Param('branchId') branchId: string,
+    @Body() updateBranchDto: Partial<CreateBranchDto>
+  ): Promise<Branch> {
+    return this.storeService.updateBranch(branchId, updateBranchDto);
+  }
+
+  /**
+   * Partial update of a branch
+   *
+   * PATCH /stores/branches/:branchId
+   */
+  @Patch('branches/:branchId')
+  async patchBranch(
+    @Param('branchId') branchId: string,
+    @Body() updateBranchDto: Partial<CreateBranchDto>
+  ): Promise<Branch> {
+    return this.storeService.updateBranch(branchId, updateBranchDto);
+  }
+
+  /**
+   * Delete a branch
+   *
+   * DELETE /stores/branches/:branchId
+   */
+  @Delete('branches/:branchId')
+  async deleteBranch(
+    @Param('branchId') branchId: string
+  ): Promise<{ message: string }> {
+    await this.storeService.deleteBranch(branchId);
+    return { message: `Branch with ID ${branchId} deleted successfully` };
+  }
+}
