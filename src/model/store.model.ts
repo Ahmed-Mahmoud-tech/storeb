@@ -10,9 +10,8 @@ import {
 export class Store {
   @PrimaryColumn({ type: 'uuid', default: () => 'uuid_generate_v4()' })
   id!: string;
-
-  @Column({ type: 'varchar', length: 20, nullable: false })
-  type!: string;
+  @Column('text', { array: true, nullable: true, default: [] })
+  type!: string[];
 
   @Column({ type: 'varchar', length: 100, nullable: false })
   name!: string;

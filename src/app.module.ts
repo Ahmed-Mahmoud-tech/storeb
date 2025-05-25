@@ -11,7 +11,6 @@ import { User } from './model/users.model';
 import { UserService } from './services/user.service';
 import { Store } from './model/store.model';
 import { Branch } from './model/branches.model';
-import { StoreBranch } from './model/store_branches.model';
 import { FileUploadService } from './services/file-upload.service';
 import { StoreController } from './controller/store.controller';
 import { StoreService } from './services/store.service';
@@ -35,7 +34,7 @@ import { StoreService } from './services/store.service';
           username: configService.get('DB_USERNAME', 'postgres'),
           password: configService.get('DB_PASSWORD', 'postgres'),
           database: configService.get('DB_DATABASE', 'nest_app'),
-          entities: [User, Store, Branch, StoreBranch],
+          entities: [User, Store, Branch],
           synchronize: !isProduction, // Auto-create tables in dev only
           logging: false, // Disable SQL logging completely
           maxQueryExecutionTime: 1000, // Log only slow queries (above 1000ms)
@@ -60,7 +59,7 @@ import { StoreService } from './services/store.service';
         return dataSource;
       },
     }),
-    TypeOrmModule.forFeature([User, Store, Branch, StoreBranch]),
+    TypeOrmModule.forFeature([User, Store, Branch]),
     PassportModule.register({ defaultStrategy: 'google' }),
   ],
   controllers: [AppController, AuthController, StoreController],

@@ -12,14 +12,8 @@ export class FileUploadService {
   // Create uploads directory if it doesn't exist
   createUploadsDir(): string {
     const uploadDir = path.join(process.cwd(), 'uploads');
-
-    console.log(`Using uploads directory at: ${uploadDir}`);
-
     if (!existsSync(uploadDir)) {
       mkdirSync(uploadDir, { recursive: true });
-      console.log(`Uploads directory created: ${uploadDir}`);
-    } else {
-      console.log(`Uploads directory exists: ${uploadDir}`);
     }
 
     try {
@@ -27,7 +21,6 @@ export class FileUploadService {
       const testFile = path.join(uploadDir, '.test-write-access');
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
-      console.log(`Uploads directory is writable: ${uploadDir}`);
     } catch (err) {
       console.error(`Uploads directory is not writable: ${uploadDir}`, err);
       throw new HttpException(
@@ -230,6 +223,35 @@ export class FileUploadService {
         'Error processing uploaded file',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  /**
+   * Delete a file from the uploads directory
+   * @param filePath The relative path to the file to delete (e.g., /uploads/filename.webp)
+   * @returns boolean indicating if deletion was successful
+   */
+  deleteFile(filePath: string): boolean {
+    if (!filePath) return false;
+
+    try {
+      // Remove the leading slash if it exists
+      const relativePath = filePath.startsWith('/')
+        ? filePath.substring(1)
+        : filePath;
+      const absolutePath = path.join(process.cwd(), relativePath);
+
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+        console.log('File deleted successfully:', absolutePath);
+        return true;
+      } else {
+        console.log('File not found, nothing to delete:', absolutePath);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      return false;
     }
   }
 }

@@ -60,8 +60,7 @@ export class StoreController implements OnModuleInit {
 
       // Basic string properties
       createStoreDto.storeName = dto.storeName as string;
-      createStoreDto.ownerId =
-        (dto.ownerId as string) || '3a9fda4b-9068-4a7f-99bc-a7b927981c67';
+      createStoreDto.ownerId = dto.ownerId as string;
       createStoreDto.logo = dto.logo as string;
       createStoreDto.banner = dto.banner as string;
       createStoreDto.themeColor = dto.themeColor as string;
@@ -86,7 +85,7 @@ export class StoreController implements OnModuleInit {
         const logoPath = await this.fileUploadService.validateAndProcessUpload(
           files.logo[0],
           {
-            width: 600,
+            width: 400,
             quality: 85,
             format: 'webp',
           }
@@ -173,6 +172,11 @@ export class StoreController implements OnModuleInit {
     return await this.storeService.findStoreById(id);
   }
 
+  @Get('storeName/:name')
+  async findStoreByName(@Param('name') name: string): Promise<Store> {
+    return await this.storeService.findStoreByName(name);
+  }
+
   /**
    * Update a store
    *
@@ -219,6 +223,18 @@ export class StoreController implements OnModuleInit {
           dto.storeTypes,
           []
         );
+      }
+
+      // Process branches if provided
+      if (dto.branches) {
+        updateStoreDto.branches = FormDataHelper.parseIfJSON<CreateBranchDto[]>(
+          dto.branches,
+          []
+        );
+      }
+
+      if (dto.ownerId) {
+        updateStoreDto.ownerId = dto.ownerId as string;
       }
 
       // Process logo if provided

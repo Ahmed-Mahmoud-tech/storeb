@@ -39,12 +39,12 @@ CREATE TABLE store (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Junction table: store_branches (many-to-many)
-CREATE TABLE store_branches (  -- Note: Matches your spelling 'brances' in the spec
-    store_id UUID REFERENCES store(id),
-    branch_id UUID REFERENCES branches(id),
-    PRIMARY KEY (store_id, branch_id)
-);
+-- -- Junction table: store_branches (many-to-many)
+-- CREATE TABLE store_branches (  -- Note: Matches your spelling 'brances' in the spec
+--     store_id UUID REFERENCES store(id),
+--     branch_id UUID REFERENCES branches(id),
+--     PRIMARY KEY (store_id, branch_id)
+-- );
 
 -- Create 'product' table
 CREATE TABLE product (

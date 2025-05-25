@@ -31,6 +31,10 @@ export class SupportNumberDto {
 export class CreateBranchDto {
   @IsOptional()
   @IsUUID('4')
+  id?: string;
+
+  @IsOptional()
+  @IsUUID('4')
   store_id?: string;
 
   @IsString()

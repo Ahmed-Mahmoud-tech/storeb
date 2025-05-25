@@ -3,9 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Store } from '../model/store.model';
 import { Branch } from '../model/branches.model';
-import { StoreBranch } from '../model/store_branches.model';
 import { CreateStoreDto } from '../dto/store.dto';
 import { CreateBranchDto } from '../dto/branch.dto';
+import { FileUploadService } from './file-upload.service';
 // import { create } from 'domain';
 
 @Injectable()
@@ -15,8 +15,7 @@ export class StoreService {
     private storeRepository: Repository<Store>,
     @InjectRepository(Branch)
     private branchRepository: Repository<Branch>,
-    @InjectRepository(StoreBranch)
-    private storeBranchRepository: Repository<StoreBranch>
+    private fileUploadService: FileUploadService
   ) {}
   // createStore(createStoreDto: CreateStoreDto): void {
   //   console.log(createStoreDto, 'createStoreDto');
@@ -37,14 +36,12 @@ export class StoreService {
     store.name = storeName;
 
     console.log('Store Service - Received logo:', logo);
-    console.log('Store Service - Received banner:', banner);
-
-    // Store logo and banner as URLs
+    console.log('Store Service - Received banner:', banner); // Store logo and banner as URLs
     store.logo = logo || null;
     store.banner = banner || null;
     store.theme_color = themeColor;
     store.delivery = hasDelivery;
-    store.type = storeTypes[0]; // Using the first store type as primary
+    store.type = storeTypes; // Using the entire storeTypes array
     store.owner_id = ownerId;
 
     const existingStore = await this.storeRepository.findOne({
@@ -80,7 +77,6 @@ export class StoreService {
       await this.createBranchForStore(storeId, branchDto);
     }
   }
-
   async createBranchForStore(
     storeId: string,
     branchDto: CreateBranchDto
@@ -104,13 +100,6 @@ export class StoreService {
     // Save branch to database
     const savedBranch = await this.branchRepository.save(branch);
 
-    // Create store-branch relationship in the junction table
-    const storeBranch = new StoreBranch();
-    storeBranch.store_id = storeId;
-    storeBranch.branch_id = savedBranch.id;
-
-    await this.storeBranchRepository.save(storeBranch);
-
     return savedBranch;
   }
 
@@ -118,20 +107,49 @@ export class StoreService {
   async findAllStores(): Promise<Store[]> {
     return this.storeRepository.find();
   }
-
-  async findStoreById(id: string): Promise<Store> {
+  async findStoreById(id: string): Promise<Store & { branches?: Branch[] }> {
     const store = await this.storeRepository.findOne({ where: { id } });
     if (!store) {
       throw new NotFoundException(`Store with ID ${id} not found`);
     }
-    return store;
+
+    // Get branches for this store
+    const branches = await this.branchRepository.find({
+      where: { store_id: id },
+    }); // Return store with branches
+    return { ...store, branches };
+  }
+
+  async findStoreByName(
+    name: string
+  ): Promise<Store & { branches?: Branch[]; owner?: any }> {
+    const store = await this.storeRepository.findOne({ where: { name } });
+    if (!store) {
+      throw new NotFoundException(`Store with name ${name} not found`);
+    }
+
+    // Get branches for this store
+    const branches = await this.branchRepository.find({
+      where: { store_id: store.id },
+    });
+
+    // Return store with branches and ensure owner_id is included
+    // Fetch full owner data from user table
+    const owner = await this.storeRepository.manager
+      .createQueryBuilder()
+      .select('*')
+      .from('user', 'user')
+      .where('id = :ownerId', { ownerId: store.owner_id })
+      .getRawOne();
+
+    return { ...store, branches, owner };
   }
 
   // UPDATE operations for Store
   async updateStore(
     id: string,
     updateData: Partial<CreateStoreDto>
-  ): Promise<Store> {
+  ): Promise<Store & { branches?: Branch[] }> {
     // First check if store exists
     const store = await this.findStoreById(id);
 
@@ -139,12 +157,26 @@ export class StoreService {
     if (updateData.storeName) {
       store.name = updateData.storeName;
     }
-
     if (updateData.logo !== undefined) {
+      // Always delete the old logo file if it exists and:
+      // - Either we're changing to a different logo
+      // - Or we're removing the logo completely
+      if (store.logo && (!updateData.logo || store.logo !== updateData.logo)) {
+        this.fileUploadService.deleteFile(store.logo);
+      }
       store.logo = updateData.logo || null;
     }
 
     if (updateData.banner !== undefined) {
+      // Always delete the old banner file if it exists and:
+      // - Either we're changing to a different banner
+      // - Or we're removing the banner completely
+      if (
+        store.banner &&
+        (!updateData.banner || store.banner !== updateData.banner)
+      ) {
+        this.fileUploadService.deleteFile(store.banner);
+      }
       store.banner = updateData.banner || null;
     }
 
@@ -157,11 +189,11 @@ export class StoreService {
     }
 
     if (updateData.storeTypes && updateData.storeTypes.length > 0) {
-      store.type = updateData.storeTypes[0];
+      store.type = updateData.storeTypes;
     }
 
     // Save updated store to database
-    const updatedStore = await this.storeRepository.save(store);
+    await this.storeRepository.save(store);
 
     // Update phone number if provided
     if (updateData.phoneNumber) {
@@ -173,40 +205,50 @@ export class StoreService {
         .execute();
     }
 
-    return updatedStore;
+    // Update branches if provided
+    if (updateData.branches && updateData.branches.length > 0) {
+      await this.updateBranchesForStore(id, updateData.branches);
+    } // Get updated store with branches
+    return this.findStoreById(id);
   }
+
   // DELETE operations for Store
   async deleteStore(id: string): Promise<void> {
     // First check if store exists
-    await this.findStoreById(id);
+    const store = await this.findStoreById(id);
 
     // Find all branches for this store
     const branches = await this.branchRepository.find({
       where: { store_id: id },
     });
 
-    // Delete store-branch relationships first
-    await Promise.all(
-      branches.map((branch) =>
-        this.storeBranchRepository.delete({
-          store_id: id,
-          branch_id: branch.id,
-        })
-      )
-    );
-
     // Delete all branches for this store
     if (branches.length > 0) {
       await this.branchRepository.remove(branches);
     }
 
+    // Delete associated image files
+    if (store.logo) {
+      this.fileUploadService.deleteFile(store.logo);
+    }
+    if (store.banner) {
+      this.fileUploadService.deleteFile(store.banner);
+    }
+
     // Delete the store
     await this.storeRepository.delete(id);
   }
+
   // READ operations for Branch
   async findAllBranchesByStoreId(storeId: string): Promise<Branch[]> {
-    // First check if store exists
-    await this.findStoreById(storeId);
+    // Check if store exists directly to avoid circular calls
+    const store = await this.storeRepository.findOne({
+      where: { id: storeId },
+    });
+
+    if (!store) {
+      throw new NotFoundException(`Store with ID ${storeId} not found`);
+    }
 
     return this.branchRepository.find({
       where: { store_id: storeId },
@@ -260,16 +302,68 @@ export class StoreService {
 
   // DELETE operations for Branch
   async deleteBranch(id: string): Promise<void> {
-    // First check if branch exists
-    const branch = await this.findBranchById(id);
-
-    // Delete store-branch relationship first
-    await this.storeBranchRepository.delete({
-      store_id: branch.store_id,
-      branch_id: id,
-    });
+    // First check if branch exists - validates that it exists
+    await this.findBranchById(id);
 
     // Delete the branch
     await this.branchRepository.delete(id);
+  }
+  /**
+   * Update branches for a store - handles creating, updating, and removing branches
+   * @param storeId The ID of the store
+   * @param branches The new branches configuration
+   */
+  async updateBranchesForStore(
+    storeId: string,
+    branches: CreateBranchDto[]
+  ): Promise<void> {
+    // Get current branches
+    const currentBranches = await this.branchRepository.find({
+      where: { store_id: storeId },
+    });
+
+    // Create maps of existing branches by ID and name for easy lookup
+    const existingBranchMapById = new Map<string, Branch>();
+    const existingBranchMapByName = new Map<string, Branch>();
+
+    for (const branch of currentBranches) {
+      existingBranchMapById.set(branch.id, branch);
+      existingBranchMapByName.set(branch.name, branch);
+    }
+
+    // Track which branches have been processed
+    const processedBranchIds = new Set<string>();
+
+    // Process each incoming branch
+    for (const branchDto of branches) {
+      let existingBranch: Branch | undefined;
+
+      // First try to find by ID if provided
+      if (branchDto.id) {
+        existingBranch = existingBranchMapById.get(branchDto.id);
+      }
+
+      // If not found by ID or no ID provided, try by name
+      if (!existingBranch) {
+        existingBranch = existingBranchMapByName.get(branchDto.name);
+      }
+
+      if (existingBranch) {
+        // Update existing branch
+        await this.updateBranch(existingBranch.id, branchDto);
+        processedBranchIds.add(existingBranch.id);
+      } else {
+        // Create new branch
+        const newBranch = await this.createBranchForStore(storeId, branchDto);
+        processedBranchIds.add(newBranch.id);
+      }
+    }
+
+    // Delete branches that are not in the new configuration
+    for (const branch of currentBranches) {
+      if (!processedBranchIds.has(branch.id)) {
+        await this.deleteBranch(branch.id);
+      }
+    }
   }
 }
