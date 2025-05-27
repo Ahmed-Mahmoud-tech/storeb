@@ -26,4 +26,27 @@ export class FormDataHelper {
     }
     return !!input;
   }
+
+  /**
+   * Safely trim string values and handle non-string inputs
+   */
+  static parseString(input: unknown, defaultValue: string = ''): string {
+    if (typeof input === 'string') {
+      return input.trim();
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Parse string or other values to number
+   */
+  static parseNumber(input: unknown): number {
+    if (typeof input === 'string') {
+      const num = parseFloat(input);
+      return isNaN(num) ? 0 : num;
+    } else if (typeof input === 'number') {
+      return input;
+    }
+    return 0;
+  }
 }

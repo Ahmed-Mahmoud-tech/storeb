@@ -17,9 +17,14 @@ import { MAX_FILE_SIZE } from '../services/file-upload.service';
 export function createFileFieldsInterceptor(
   fields: { name: string; maxCount: number }[]
 ) {
+  console.log('Creating FileFieldsInterceptor with fields:', fields);
   return FileFieldsInterceptor(fields, {
     storage: diskStorage({
       destination: (req, file, cb) => {
+        console.log('File upload detected:', file);
+        console.log('Request body:', req.body);
+        console.log('Request path:', req.path);
+
         // Upload directory for files
         const uploadDir = path.join(process.cwd(), 'uploads');
         // Ensure the directory exists
@@ -59,9 +64,15 @@ export function createFileFieldsInterceptor(
  * @returns Configured FileInterceptor
  */
 export function createFileInterceptor(fieldName: string) {
+  console.log('Creating FileInterceptor with field:', fieldName);
   return FileInterceptor(fieldName, {
     storage: diskStorage({
-      destination: './uploads',
+      destination: (req, file, cb) => {
+        console.log('Single file upload detected:', file);
+        console.log('Request body:', req.body);
+        console.log('Request path:', req.path);
+        cb(null, './uploads');
+      },
       filename: (req, file, cb) => {
         const fileSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         const ext = extname(file.originalname);
