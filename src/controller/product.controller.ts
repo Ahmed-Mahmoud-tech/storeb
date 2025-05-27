@@ -224,6 +224,8 @@ export class ProductController implements OnModuleInit {
     @UploadedFiles()
     files: { images?: Express.Multer.File[] }
   ) {
+    console.log(dto, 'Update product DTO:');
+
     try {
       // Verify product exists
       await this.productService.findOne(productCode);
@@ -274,6 +276,35 @@ export class ProductController implements OnModuleInit {
         updateProductDto.tags = FormDataHelper.parseIfJSON(dto.tags, {});
       }
 
+      // Ensure removeImages is included in the DTO
+      if (!dto.removeImages) {
+        dto.removeImages = [];
+      }
+      console.log(dto.removeImages, 'removeImages');
+
+      // Handle image removal if specified
+      const imagesToRemove = FormDataHelper.parseIfJSON<string[]>(
+        dto.removeImages,
+        []
+      );
+
+      // Delete the files from the upload folder and remove from DB
+      for (const image of imagesToRemove) {
+        const deletionResult = this.fileUploadService.deleteFile(image);
+        console.log(
+          `Attempting to delete file: ${image}, Success: ${deletionResult}`
+        );
+      }
+
+      // Remove only the imagesToRemove from the database
+      const product = await this.productService.findOne(productCode);
+      const updatedImages = product.images.filter(
+        (img) => !imagesToRemove.includes(img)
+      );
+      const partialUpdateDto = new UpdateProductDto();
+      partialUpdateDto.images = updatedImages;
+      await this.productService.update(productCode, partialUpdateDto);
+
       // Handle image uploads
       const imageUrls: string[] = [];
       if (files?.images && files.images.length > 0) {
@@ -290,13 +321,14 @@ export class ProductController implements OnModuleInit {
         }
       }
 
-      // If existing image paths were provided, merge with new uploads
-      const existingImages = FormDataHelper.parseIfJSON<string[]>(
-        dto.images,
-        []
-      );
-      if (imageUrls.length > 0 || existingImages.length > 0) {
-        updateProductDto.images = [...imageUrls, ...existingImages];
+      // Merge newly uploaded images with existing images from the database, excluding imagesToRemove
+      const finalImages = [
+        ...product.images.filter((image) => !imagesToRemove.includes(image)),
+        ...imageUrls,
+      ];
+
+      if (finalImages.length > 0) {
+        updateProductDto.images = finalImages;
       }
 
       // Update product
