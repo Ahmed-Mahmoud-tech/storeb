@@ -362,4 +362,50 @@ export class ProductController implements OnModuleInit {
       );
     }
   }
+
+  /**
+   * Get product details, its branches, and the store of the first branch
+   * GET /products/:productCode/with-branches-and-store
+   */
+  @Get(':productCode/with-branches-and-store')
+  async getProductWithBranchesAndStore(
+    @Param('productCode') productCode: string
+  ) {
+    // 1. Get product details
+    const product = await this.productService.findOne(productCode);
+    if (!product) {
+      throw new NotFoundException(`Product with code ${productCode} not found`);
+    }
+
+    // 2. Get branch IDs for this product
+    const branchIds =
+      await this.productService.findProductBranches(productCode);
+    let branches: any[] = [];
+    let store: any = null;
+    if (branchIds.length > 0) {
+      // 3. Get branch details
+      const placeholders = branchIds.map((_, idx) => `$${idx + 1}`).join(',');
+      const query = `SELECT * FROM branches WHERE id IN (${placeholders})`;
+      const branchRepo = this.productService['productBranchRepository'].manager;
+      branches = await branchRepo.query(query, branchIds);
+
+      // 4. Get store from the first branch (if exists)
+      const firstBranch = branches[0] as Record<string, any>;
+      if (firstBranch && firstBranch.store_id) {
+        const storeQuery = `SELECT * FROM store WHERE id = $1 LIMIT 1`;
+        const stores: any[] = await branchRepo.query(storeQuery, [
+          firstBranch.store_id,
+        ]);
+        if (Array.isArray(stores) && stores.length > 0) {
+          store = stores[0];
+        }
+      }
+    }
+
+    return {
+      ...product,
+      branches,
+      store,
+    };
+  }
 }
