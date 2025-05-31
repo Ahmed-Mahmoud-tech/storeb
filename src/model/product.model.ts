@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { Rating } from './rating.model';
 
 @Entity('product')
 export class Product {
@@ -43,7 +45,9 @@ export class Product {
 
   @Column({ type: 'uuid', nullable: true })
   created_by?: string;
-
   @Column({ type: 'uuid', nullable: true })
   updated_by?: string;
+
+  @OneToMany(() => Rating, (rating) => rating.product)
+  ratings: Rating[];
 }

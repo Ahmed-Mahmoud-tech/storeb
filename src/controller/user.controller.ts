@@ -29,7 +29,6 @@ export class UserController {
   async getUserById(@Param('id') id: string): Promise<User> {
     return await this.userService.getUserById(id);
   }
-
   @Put(':id')
   async updateUser(
     @Param('id') id: string,
@@ -41,16 +40,5 @@ export class UserController {
   @Delete(':id')
   async deleteUser(@Param('id') id: string): Promise<string> {
     return await this.userService.deleteUser(id);
-  }
-
-  /**
-   * Endpoint to create or update a salesman by phone number.
-   * Payload: { phone: string }
-   * If a user with the given phone exists, updates their role to 'sales'.
-   * If not, creates a new user with role 'sales'.
-   */
-  @Post('salesman')
-  async createOrUpdateSalesman(@Body('phone') phone: string): Promise<User> {
-    return await this.userService.createOrUpdateSalesmanByPhone(phone);
   }
 }

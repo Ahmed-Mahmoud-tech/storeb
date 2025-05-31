@@ -13,11 +13,19 @@ import { Store } from './model/store.model';
 import { Branch } from './model/branches.model';
 import { Product } from './model/product.model';
 import { ProductBranch } from './model/product_branches.model';
+import { Rating } from './model/rating.model';
+import { Employee } from './model/employees.model';
+import { EmployeeBranch } from './model/employee_branches.model';
 import { FileUploadService } from './services/file-upload.service';
 import { StoreController } from './controller/store.controller';
+import { UserController } from './controller/user.controller';
 import { StoreService } from './services/store.service';
 import { ProductController } from './controller/product.controller';
 import { ProductService } from './services/product.service';
+import { RatingService } from './services/rating.service';
+import { RatingController } from './controller/rating.controller';
+import { EmployeeController } from './controller/employee.controller';
+import { EmployeeService } from './services/employee.service';
 
 @Module({
   imports: [
@@ -38,7 +46,16 @@ import { ProductService } from './services/product.service';
           username: configService.get('DB_USERNAME', 'postgres'),
           password: configService.get('DB_PASSWORD', 'postgres'),
           database: configService.get('DB_DATABASE', 'nest_app'),
-          entities: [User, Store, Branch, Product, ProductBranch],
+          entities: [
+            User,
+            Store,
+            Branch,
+            Product,
+            ProductBranch,
+            Rating,
+            Employee,
+            EmployeeBranch,
+          ],
           synchronize: !isProduction, // Auto-create tables in dev only
           logging: false, // Disable SQL logging completely
           maxQueryExecutionTime: 1000, // Log only slow queries (above 1000ms)
@@ -63,14 +80,26 @@ import { ProductService } from './services/product.service';
         return dataSource;
       },
     }),
-    TypeOrmModule.forFeature([User, Store, Branch, Product, ProductBranch]),
+    TypeOrmModule.forFeature([
+      User,
+      Store,
+      Branch,
+      Product,
+      ProductBranch,
+      Rating,
+      Employee,
+      EmployeeBranch,
+    ]),
     PassportModule.register({ defaultStrategy: 'google' }),
   ],
   controllers: [
     AppController,
     AuthController,
     StoreController,
+    UserController,
     ProductController,
+    RatingController,
+    EmployeeController,
   ],
   providers: [
     AppService,
@@ -79,6 +108,8 @@ import { ProductService } from './services/product.service';
     StoreService,
     ProductService,
     FileUploadService,
+    RatingService,
+    EmployeeService,
   ],
 })
 export class AppModule {}

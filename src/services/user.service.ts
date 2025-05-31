@@ -32,6 +32,15 @@ export class UserService {
   }
 
   /**
+   * Finds a user by phone number.
+   * @param phone - The phone number to search for.
+   * @returns A promise that resolves to the user or null if not found.
+   */
+  async findUserByPhone(phone: string): Promise<User | null> {
+    return await this.userRepository.findOne({ where: { phone } });
+  }
+
+  /**
    * Fetches all users.
    * @returns A promise that resolves to an array of users.
    */
@@ -68,9 +77,42 @@ export class UserService {
    * @returns A promise that resolves to the updated user.
    */
   async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.getUserById(id);
-    Object.assign(user, updateUserDto);
-    return await this.userRepository.save(user);
+    try {
+      console.log(id, '4444444444444444', updateUserDto);
+
+      const user = await this.getUserById(id);
+
+      // Apply updates from updateUserDto explicitly to avoid any issues
+      if (updateUserDto.name) {
+        user.name = updateUserDto.name;
+      }
+      if (updateUserDto.phone) {
+        user.phone = updateUserDto.phone;
+      }
+      if (updateUserDto.type) {
+        user.type = updateUserDto.type;
+      }
+      if (updateUserDto.email) {
+        user.email = updateUserDto.email;
+      }
+      if (updateUserDto.updated_by) {
+        // Add any logic for updated_by if needed
+      }
+
+      // Save the updated user
+      return await this.userRepository.save(user);
+    } catch (error) {
+      // Just rethrow the error if it's already a HttpException (like NOT_FOUND)
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      // For other errors, wrap them in a generic HttpException
+      throw new HttpException(
+        'Failed to update user',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   /**
@@ -83,7 +125,6 @@ export class UserService {
     await this.userRepository.remove(user);
     return 'User deleted successfully';
   }
-
   /**
    * Creates or updates a salesman by phone number.
    * If a user with the given phone exists, updates their role to 'sales'.
@@ -91,20 +132,4 @@ export class UserService {
    * @param phone - The phone number of the salesman.
    * @returns The created or updated user.
    */
-  async createOrUpdateSalesmanByPhone(phone: string): Promise<User> {
-    let user = await this.userRepository.findOne({ where: { phone } });
-    if (user) {
-      user.type = 'sales';
-      return await this.userRepository.save(user);
-    } else {
-      // Create a new user with only phone and type sales
-      user = this.userRepository.create({
-        phone,
-        type: 'sales',
-        name: phone,
-        email: `${phone}@sales.local`,
-      });
-      return await this.userRepository.save(user);
-    }
-  }
 }

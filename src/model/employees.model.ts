@@ -18,9 +18,6 @@ export class Employee {
   to_user_id!: string;
 
   @Column({ type: 'varchar', length: 20, nullable: false })
-  role!: string;
-
-  @Column({ type: 'varchar', length: 20, nullable: false })
   status!: string;
 
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })

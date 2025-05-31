@@ -75,7 +75,6 @@ CREATE TABLE employees (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     from_user_id UUID NOT NULL REFERENCES "user"(id),
     to_user_id UUID NOT NULL REFERENCES "user"(id),
-    role VARCHAR(20) NOT NULL CHECK (role IN ('manager', 'sales')),
     status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected', 'suspend', 'resignation')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

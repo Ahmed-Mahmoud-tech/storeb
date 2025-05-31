@@ -57,7 +57,7 @@ export class StoreService {
       await this.storeRepository.manager
         .createQueryBuilder()
         .update('user')
-        .set({ phone: phoneNumber })
+        .set({ phone: phoneNumber, type: 'owner' })
         .where('id = :ownerId', { ownerId })
         .execute();
     }
