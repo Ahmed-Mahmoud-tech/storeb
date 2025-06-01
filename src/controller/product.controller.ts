@@ -150,14 +150,26 @@ export class ProductController implements OnModuleInit {
     @Query('offset') offset?: number,
     @Query('status') status?: string,
     @Query('category') category?: string,
-    @Query('tag') tag?: string
+    @Query('tag') tag?: string,
+    @Query('branchId') branchId?: string,
+    @Query('storeId') storeId?: string,
+    @Query('search') search?: string,
+    @Query('storeName') storeName?: string,
+    @Query('createdBy') createdBy?: string
   ) {
+    // Convert createdBy to boolean
+    const createdByBool = createdBy === 'true' || createdBy === '1';
     return await this.productService.findAll(
       limit ? +limit : 10,
       offset ? +offset : 0,
       status,
       category,
-      tag
+      tag,
+      branchId,
+      storeId,
+      search,
+      storeName,
+      createdByBool
     );
   }
 

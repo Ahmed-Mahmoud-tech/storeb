@@ -100,8 +100,13 @@ export class ProductService {
     offset: number = 0,
     status?: string,
     category?: string,
-    tag?: string
-  ): Promise<{ products: Product[]; total: number }> {
+    tag?: string,
+    branchId?: string,
+    storeId?: string,
+    search?: string,
+    storeName?: string,
+    createdBy?: boolean
+  ): Promise<{ products: any[]; total: number }> {
     let query = this.productRepository.createQueryBuilder('product');
 
     if (status) {
@@ -116,6 +121,49 @@ export class ProductService {
 
     if (tag) {
       query = query.andWhere(':tag = ANY(product.tags)', { tag });
+    }
+
+    // Filter by branchId if provided
+    if (branchId) {
+      query = query
+        .innerJoin(
+          'product_branches',
+          'pb',
+          'pb.product_code = product.product_code'
+        )
+        .andWhere('pb.branch_id = :branchId', { branchId });
+    }
+
+    // Filter by storeId or storeName if provided
+    if (storeId || storeName) {
+      if (!branchId) {
+        query = query.innerJoin(
+          'product_branches',
+          'pb',
+          'pb.product_code = product.product_code'
+        );
+      }
+      query = query.innerJoin('branches', 'b', 'b.id = pb.branch_id');
+      if (storeId) {
+        query = query.andWhere('b.store_id = :storeId', { storeId });
+      }
+      if (storeName) {
+        query = query
+          .innerJoin('store', 's', 's.id = b.store_id')
+          .andWhere('s.name ILIKE :storeName', { storeName: `%${storeName}%` });
+      }
+    }
+
+    // Add search by productCode or productName
+    if (search) {
+      query = query.andWhere(
+        '(product.product_code ILIKE :search OR product.product_name ILIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    if (createdBy) {
+      query = query.leftJoinAndSelect('product.createdByUser', 'createdByUser');
     }
 
     const total = await query.getCount();
@@ -151,7 +199,6 @@ export class ProductService {
       order: { created_at: 'DESC' },
     });
   }
-
   async findOne(product_code: string): Promise<Product> {
     const product = await this.productRepository.findOne({
       where: { product_code: product_code },
@@ -164,6 +211,17 @@ export class ProductService {
     }
 
     return product;
+  }
+
+  // New method to find multiple products by their codes
+  async findByProductCodes(product_codes: string[]): Promise<Product[]> {
+    if (!product_codes || product_codes.length === 0) {
+      return [];
+    }
+
+    return this.productRepository.find({
+      where: { product_code: In(product_codes) },
+    });
   }
 
   async findProductBranches(product_code: string): Promise<string[]> {

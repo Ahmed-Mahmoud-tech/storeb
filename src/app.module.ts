@@ -26,6 +26,9 @@ import { RatingService } from './services/rating.service';
 import { RatingController } from './controller/rating.controller';
 import { EmployeeController } from './controller/employee.controller';
 import { EmployeeService } from './services/employee.service';
+import { CustomerProduct } from './model/customer_products.model';
+import { CustomerProductService } from './services/customer_product.service';
+import { CustomerProductController } from './controller/customer_product.controller';
 
 @Module({
   imports: [
@@ -55,6 +58,7 @@ import { EmployeeService } from './services/employee.service';
             Rating,
             Employee,
             EmployeeBranch,
+            CustomerProduct,
           ],
           synchronize: !isProduction, // Auto-create tables in dev only
           logging: false, // Disable SQL logging completely
@@ -89,6 +93,7 @@ import { EmployeeService } from './services/employee.service';
       Rating,
       Employee,
       EmployeeBranch,
+      CustomerProduct,
     ]),
     PassportModule.register({ defaultStrategy: 'google' }),
   ],
@@ -100,6 +105,7 @@ import { EmployeeService } from './services/employee.service';
     ProductController,
     RatingController,
     EmployeeController,
+    CustomerProductController,
   ],
   providers: [
     AppService,
@@ -110,6 +116,7 @@ import { EmployeeService } from './services/employee.service';
     FileUploadService,
     RatingService,
     EmployeeService,
+    CustomerProductService,
   ],
 })
 export class AppModule {}

@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Store } from './store.model';
 
 @Entity('branches')
 export class Branch {
@@ -31,7 +34,10 @@ export class Branch {
 
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   created_at!: Date;
-
   @UpdateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   updated_at!: Date;
+
+  @ManyToOne(() => Store)
+  @JoinColumn({ name: 'store_id' })
+  store!: Store;
 }

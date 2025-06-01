@@ -5,8 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { Rating } from './rating.model';
+import { User } from '../model/users.model';
 
 @Entity('product')
 export class Product {
@@ -47,6 +50,11 @@ export class Product {
   created_by?: string;
   @Column({ type: 'uuid', nullable: true })
   updated_by?: string;
+
+  // Add relation to User for created_by
+  @ManyToOne(() => User, { eager: false })
+  @JoinColumn({ name: 'created_by' })
+  createdByUser?: User;
 
   @OneToMany(() => Rating, (rating) => rating.product)
   ratings: Rating[];
