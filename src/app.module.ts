@@ -5,8 +5,10 @@ import { DataSource } from 'typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './controller/auth.controller';
 import { GoogleStrategy } from './auth/google.strategy';
+import { JwtStrategy } from './auth/jwt.strategy';
 import { User } from './model/users.model';
 import { UserService } from './services/user.service';
 import { Store } from './model/store.model';
@@ -29,6 +31,9 @@ import { EmployeeService } from './services/employee.service';
 import { CustomerProduct } from './model/customer_products.model';
 import { CustomerProductService } from './services/customer_product.service';
 import { CustomerProductController } from './controller/customer_product.controller';
+import { Favorite } from './model/favorite.model';
+import { FavoriteService } from './services/favorite.service';
+import { FavoriteController } from './controller/favorite.controller';
 
 @Module({
   imports: [
@@ -59,6 +64,7 @@ import { CustomerProductController } from './controller/customer_product.control
             Employee,
             EmployeeBranch,
             CustomerProduct,
+            Favorite,
           ],
           synchronize: !isProduction, // Auto-create tables in dev only
           logging: false, // Disable SQL logging completely
@@ -94,8 +100,13 @@ import { CustomerProductController } from './controller/customer_product.control
       Employee,
       EmployeeBranch,
       CustomerProduct,
+      Favorite,
     ]),
     PassportModule.register({ defaultStrategy: 'google' }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'your-secret-key',
+      signOptions: { expiresIn: '7d' },
+    }),
   ],
   controllers: [
     AppController,
@@ -106,10 +117,12 @@ import { CustomerProductController } from './controller/customer_product.control
     RatingController,
     EmployeeController,
     CustomerProductController,
+    FavoriteController,
   ],
   providers: [
     AppService,
     GoogleStrategy,
+    JwtStrategy,
     UserService,
     StoreService,
     ProductService,
@@ -117,6 +130,7 @@ import { CustomerProductController } from './controller/customer_product.control
     RatingService,
     EmployeeService,
     CustomerProductService,
+    FavoriteService,
   ],
 })
 export class AppModule {}

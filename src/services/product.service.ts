@@ -94,19 +94,19 @@ export class ProductService {
       await this.productBranchRepository.save(productBranch);
     }
   }
-
   async findAll(
     limit: number = 10,
-    offset: number = 0,
+    page: number = 1,
     status?: string,
     category?: string,
-    tag?: string,
+    tag?: string | string[],
     branchId?: string,
     storeId?: string,
     search?: string,
     storeName?: string,
-    createdBy?: boolean
-  ): Promise<{ products: any[]; total: number }> {
+    createdBy?: boolean,
+    sale?: boolean // <-- add sale param
+  ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
     let query = this.productRepository.createQueryBuilder('product');
 
     if (status) {
@@ -118,9 +118,30 @@ export class ProductService {
         category: `%${category}%`,
       });
     }
-
     if (tag) {
-      query = query.andWhere(':tag = ANY(product.tags)', { tag });
+      // Support multiple tags (AND logic: product must have all tags)
+      let tagsToFilter: string[];
+
+      // Convert to array if it's a string, or use as-is if already an array
+      if (Array.isArray(tag)) {
+        tagsToFilter = tag;
+        console.log('Tags received as array:', tagsToFilter);
+      } else {
+        tagsToFilter = [tag];
+        console.log(
+          'Tags received as string, converted to array:',
+          tagsToFilter
+        );
+      }
+
+      // Apply each tag as a separate WHERE condition (AND logic)
+      tagsToFilter.forEach((t, idx) => {
+        console.log(`Adding filter for tag${idx}:`, t);
+        // Use parameter binding with explicit casting
+        query = query.andWhere(`cast(:tag${idx} as text) = ANY(product.tags)`, {
+          [`tag${idx}`]: t,
+        });
+      });
     }
 
     // Filter by branchId if provided
@@ -166,7 +187,13 @@ export class ProductService {
       query = query.leftJoinAndSelect('product.createdByUser', 'createdByUser');
     }
 
-    const total = await query.getCount();
+    // Add sale filter
+    if (sale) {
+      query = query.andWhere('product.price_before_sale IS NOT NULL');
+    }
+
+    const total = await query.getCount(); // Calculate offset based on page number
+    const offset = (page - 1) * limit;
 
     const products = await query
       .orderBy('product.created_at', 'DESC')
@@ -174,7 +201,7 @@ export class ProductService {
       .offset(offset)
       .getMany();
 
-    return { products, total };
+    return { products, total, page, limit };
   }
 
   async findByBranch(

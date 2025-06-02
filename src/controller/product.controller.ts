@@ -143,25 +143,32 @@ export class ProductController implements OnModuleInit {
    * Get all products with pagination and filtering
    *
    * GET /products
-   */
-  @Get()
+   */ @Get()
   async findAll(
     @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query('page') page?: number,
     @Query('status') status?: string,
     @Query('category') category?: string,
-    @Query('tag') tag?: string,
+    @Query('tag') tag?: string | string[],
     @Query('branchId') branchId?: string,
     @Query('storeId') storeId?: string,
     @Query('search') search?: string,
     @Query('storeName') storeName?: string,
-    @Query('createdBy') createdBy?: string
+    @Query('createdBy') createdBy?: string,
+    @Query('sale') sale?: string // <-- add sale query param
   ) {
+    // Debug tag parameter
+    console.log('Tag parameter type:', typeof tag);
+    console.log('Tag parameter value:', tag);
+    console.log('Tag parameter is array:', Array.isArray(tag));
+
     // Convert createdBy to boolean
     const createdByBool = createdBy === 'true' || createdBy === '1';
+    // Convert sale to boolean
+    const saleBool = sale === 'true' || sale === '1';
     return await this.productService.findAll(
       limit ? +limit : 10,
-      offset ? +offset : 0,
+      page ? +page : 1,
       status,
       category,
       tag,
@@ -169,7 +176,8 @@ export class ProductController implements OnModuleInit {
       storeId,
       search,
       storeName,
-      createdByBool
+      createdByBool,
+      saleBool // <-- pass sale filter to service
     );
   }
 

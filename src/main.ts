@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import * as fs from 'fs';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -12,6 +13,9 @@ async function bootstrap() {
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
+
+  // Use cookie-parser middleware
+  app.use(cookieParser());
 
   // Serve static files from the uploads directory
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
@@ -36,7 +40,6 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     })
   );
-
   await app.listen(process.env.PORT ?? 8000);
 }
 // Call bootstrap function and handle any errors
