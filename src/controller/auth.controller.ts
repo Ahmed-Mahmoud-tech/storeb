@@ -125,7 +125,7 @@ export class AuthController {
 
     // Set JWT token as an HTTP-only cookie
     const cookieOptions: CookieOptions = {
-      httpOnly: true,
+      httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
       sameSite: 'lax',
@@ -133,25 +133,35 @@ export class AuthController {
     };
 
     res.cookie('auth_token', token, cookieOptions);
-
-    // Sanitize and encode user data for URL
-    const encodedUser = encodeURIComponent(
+    res.cookie(
+      'user',
       JSON.stringify({
         id: user.id,
         name: user.name,
         email: user.email,
         type: user.type,
-      })
+      }),
+      cookieOptions
     );
+
+    // // Sanitize and encode user data for URL
+    // const encodedUser = encodeURIComponent(
+    //   JSON.stringify({
+    //     id: user.id,
+    //     name: user.name,
+    //     email: user.email,
+    //     type: user.type,
+    //   })
+    // );
     // Build redirect URL safely
     const baseUrl = 'http://localhost:3000';
     let redirectUrl = baseUrl;
     if (redirectLink) {
       redirectUrl += `/${redirectLink}`;
     }
-    redirectUrl += `?user=${encodedUser}`;
+    // redirectUrl += `?user=${encodedUser}`;
     if (redirectSection) {
-      redirectUrl += `&section=${encodeURIComponent(redirectSection)}`;
+      redirectUrl += `?section=${encodeURIComponent(redirectSection)}`;
     }
 
     return res.redirect(redirectUrl);
