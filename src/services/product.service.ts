@@ -5,6 +5,7 @@ import { Product } from '../model/product.model';
 import { ProductBranch } from '../model/product_branches.model';
 import { CreateProductDto, UpdateProductDto } from '../dto/product.dto';
 import { FileUploadService } from './file-upload.service';
+import { FavoriteService } from './favorite.service';
 
 @Injectable()
 export class ProductService {
@@ -13,7 +14,8 @@ export class ProductService {
     private productRepository: Repository<Product>,
     @InjectRepository(ProductBranch)
     private productBranchRepository: Repository<ProductBranch>,
-    private fileUploadService: FileUploadService
+    private fileUploadService: FileUploadService,
+    private favoriteService: FavoriteService
   ) {}
 
   async createProduct(createProductDto: CreateProductDto): Promise<Product> {
@@ -97,7 +99,7 @@ export class ProductService {
   async findAll(
     limit: number = 10,
     page: number = 1,
-    status?: string,
+    status?: string | string[],
     category?: string,
     tag?: string | string[],
     branchId?: string,
@@ -105,12 +107,23 @@ export class ProductService {
     search?: string,
     storeName?: string,
     createdBy?: boolean,
-    sale?: boolean // <-- add sale param
+    sale?: boolean,
+    userId?: string
   ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
     let query = this.productRepository.createQueryBuilder('product');
 
     if (status) {
-      query = query.andWhere('product.status = :status', { status });
+      if (Array.isArray(status)) {
+        if (status.length > 0) {
+          query = query.andWhere('product.status IN (:...statuses)', {
+            statuses: status,
+          });
+          console.log('Filtering by multiple statuses:', status);
+        }
+      } else {
+        query = query.andWhere('product.status = :status', { status });
+        console.log('Filtering by single status:', status);
+      }
     }
 
     if (category) {
@@ -194,12 +207,27 @@ export class ProductService {
 
     const total = await query.getCount(); // Calculate offset based on page number
     const offset = (page - 1) * limit;
-
     const products = await query
       .orderBy('product.created_at', 'DESC')
       .limit(limit)
       .offset(offset)
       .getMany();
+    console.log(userId, 'userId in product service');
+
+    // Add isFavorite flag if userId is provided
+    if (userId) {
+      // Process each product to check if it's a favorite for the user
+      const productsWithFavoriteStatus = await Promise.all(
+        products.map(async (product) => {
+          const isFavorite = await this.favoriteService.isFavorite(
+            userId,
+            product.product_code
+          );
+          return { ...product, isFavorite };
+        })
+      );
+      return { products: productsWithFavoriteStatus, total, page, limit };
+    }
 
     return { products, total, page, limit };
   }

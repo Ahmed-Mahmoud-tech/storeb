@@ -50,4 +50,19 @@ export class FavoriteService {
     if (!favorite) throw new NotFoundException('Favorite not found');
     await this.favoriteRepository.remove(favorite);
   }
+
+  // Get user's favorites by user_id
+  async findByUserId(user_id: string): Promise<Favorite[]> {
+    return await this.favoriteRepository.find({
+      where: { user_id },
+    });
+  }
+
+  // Check if a product is favorite for a specific user
+  async isFavorite(user_id: string, product: string): Promise<string | null> {
+    const favorite = await this.favoriteRepository.findOne({
+      where: { user_id, product },
+    });
+    return favorite?.id || null;
+  }
 }

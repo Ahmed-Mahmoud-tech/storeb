@@ -12,11 +12,14 @@ import {
   BadRequestException,
   OnModuleInit,
   NotFoundException,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { ProductService } from '../services/product.service';
 import { FileUploadService } from '../services/file-upload.service';
 import { CreateProductDto, UpdateProductDto } from '../dto/product.dto';
 import { Product } from '../model/product.model';
+import { AuthHelper } from '../utils/auth.helper';
 import { createFileFieldsInterceptor } from '../interceptors/file-upload.interceptor';
 import { FormDataParserInterceptor } from '../interceptors/form-data-parser.interceptor';
 import { FormDataHelper } from '../utils/form-data.helper';
@@ -145,9 +148,10 @@ export class ProductController implements OnModuleInit {
    * GET /products
    */ @Get()
   async findAll(
+    @Req() req: Request,
     @Query('limit') limit?: number,
     @Query('page') page?: number,
-    @Query('status') status?: string,
+    @Query('status') status?: string | string[],
     @Query('category') category?: string,
     @Query('tag') tag?: string | string[],
     @Query('branchId') branchId?: string,
@@ -155,17 +159,22 @@ export class ProductController implements OnModuleInit {
     @Query('search') search?: string,
     @Query('storeName') storeName?: string,
     @Query('createdBy') createdBy?: string,
-    @Query('sale') sale?: string // <-- add sale query param
+    @Query('sale') sale?: string
   ) {
-    // Debug tag parameter
-    console.log('Tag parameter type:', typeof tag);
-    console.log('Tag parameter value:', tag);
-    console.log('Tag parameter is array:', Array.isArray(tag));
+    // Get user ID from authorization token
+    const authHeader = req.headers.authorization;
+    console.log('Auth header found:', authHeader);
+
+    const user = AuthHelper.extractUserIdFromToken(authHeader);
+    if (user) {
+      console.log('User ID extracted from token:', user);
+    }
 
     // Convert createdBy to boolean
     const createdByBool = createdBy === 'true' || createdBy === '1';
     // Convert sale to boolean
     const saleBool = sale === 'true' || sale === '1';
+
     return await this.productService.findAll(
       limit ? +limit : 10,
       page ? +page : 1,
@@ -177,7 +186,8 @@ export class ProductController implements OnModuleInit {
       search,
       storeName,
       createdByBool,
-      saleBool // <-- pass sale filter to service
+      saleBool,
+      user.userId
     );
   }
 
