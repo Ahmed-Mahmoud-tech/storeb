@@ -386,14 +386,26 @@ export class ProductService {
     // Save updated product
     return this.productRepository.save(product);
   }
-
   async remove(product_code: string): Promise<void> {
     const product = await this.findOne(product_code);
+    console.log(product, 'product in remove method');
 
-    // First delete the product-branch relationships
+    // First delete any favorites referencing this product
+    try {
+      // Using raw query to delete favorites by product code
+      const favoriteRepo = this.productRepository.manager;
+      await favoriteRepo.query('DELETE FROM favorite WHERE product = $1', [
+        product_code,
+      ]);
+    } catch (error) {
+      console.error('Error deleting favorites:', error);
+      // Continue with deletion even if this fails as the main delete might still work
+    }
+
+    // Then delete the product-branch relationships
     await this.productBranchRepository.delete({ product_code: product_code });
 
-    // Then delete the product
+    // Finally delete the product
     await this.productRepository.remove(product);
   }
 

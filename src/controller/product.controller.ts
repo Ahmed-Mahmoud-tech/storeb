@@ -17,6 +17,7 @@ import {
 import { Request } from 'express';
 import { ProductService } from '../services/product.service';
 import { FileUploadService } from '../services/file-upload.service';
+import { FavoriteService } from '../services/favorite.service';
 import { CreateProductDto, UpdateProductDto } from '../dto/product.dto';
 import { Product } from '../model/product.model';
 import { AuthHelper } from '../utils/auth.helper';
@@ -28,7 +29,8 @@ import { FormDataHelper } from '../utils/form-data.helper';
 export class ProductController implements OnModuleInit {
   constructor(
     private readonly productService: ProductService,
-    private readonly fileUploadService: FileUploadService
+    private readonly fileUploadService: FileUploadService,
+    private readonly favoriteService: FavoriteService
   ) {}
 
   onModuleInit() {
@@ -213,20 +215,40 @@ export class ProductController implements OnModuleInit {
    * Get a single product by product code
    *
    * GET /products/:productCode
-   */
-  @Get(':productCode')
-  async findOne(@Param('productCode') productCode: string) {
+   */ @Get(':productCode')
+  async findOne(
+    @Param('productCode') productCode: string,
+    @Req() req: Request
+  ) {
     try {
       const product = await this.productService.findOne(productCode);
+      console.log('authHeader', 'Auth header in findOne');
 
       // Get branch IDs for this product
       const branchIds =
         await this.productService.findProductBranches(productCode);
 
+      // Get user ID from authorization token
+      const authHeader = req.headers.authorization;
+      let isFavorite = null;
+
+      // Check if user is logged in and if this product is their favorite
+      if (authHeader) {
+        const user = AuthHelper.extractUserIdFromToken(authHeader);
+        if (user && user.userId) {
+          // Check if the product is favorited by the user
+          isFavorite = await this.favoriteService.isFavorite(
+            user.userId,
+            productCode
+          );
+        }
+      }
+
       // Return combined data
       return {
         ...product,
         branchIds,
+        isFavorite,
       };
     } catch (error: unknown) {
       if (error instanceof NotFoundException) {
@@ -392,19 +414,35 @@ export class ProductController implements OnModuleInit {
       );
     }
   }
-
   /**
    * Get product details, its branches, and the store of the first branch
    * GET /products/:productCode/with-branches-and-store
    */
   @Get(':productCode/with-branches-and-store')
   async getProductWithBranchesAndStore(
-    @Param('productCode') productCode: string
+    @Param('productCode') productCode: string,
+    @Req() req: Request
   ) {
     // 1. Get product details
     const product = await this.productService.findOne(productCode);
     if (!product) {
       throw new NotFoundException(`Product with code ${productCode} not found`);
+    }
+
+    // Get user ID from authorization token
+    const authHeader = req.headers.authorization;
+    let isFavorite = null;
+
+    // Check if user is logged in and if this product is their favorite
+    if (authHeader) {
+      const user = AuthHelper.extractUserIdFromToken(authHeader);
+      if (user && user.userId) {
+        // Check if the product is favorited by the user
+        isFavorite = await this.favoriteService.isFavorite(
+          user.userId,
+          productCode
+        );
+      }
     }
 
     // 2. Get branch IDs for this product
@@ -431,11 +469,11 @@ export class ProductController implements OnModuleInit {
         }
       }
     }
-
     return {
       ...product,
       branches,
       store,
+      isFavorite,
     };
   }
 }
