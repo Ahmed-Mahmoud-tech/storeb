@@ -189,7 +189,7 @@ export class ProductController implements OnModuleInit {
       storeName,
       createdByBool,
       saleBool,
-      user.userId
+      user?.userId
     );
   }
 
@@ -429,19 +429,64 @@ export class ProductController implements OnModuleInit {
       throw new NotFoundException(`Product with code ${productCode} not found`);
     }
 
-    // Get user ID from authorization token
-    const authHeader = req.headers.authorization;
-    let isFavorite = null;
+    // Get userId from cookies (if present)
+    let userId: string | undefined;
+    if (req.cookies && req.cookies.userId) {
+      userId = req.cookies.userId;
+    } else {
+      // fallback: try to extract from token if not in cookies
+      const authHeader = req.headers.authorization;
+      if (authHeader) {
+        const user = AuthHelper.extractUserIdFromToken(authHeader);
+        if (user && user.userId) {
+          userId = user.userId;
+        }
+      }
+    }
 
-    // Check if user is logged in and if this product is their favorite
-    if (authHeader) {
-      const user = AuthHelper.extractUserIdFromToken(authHeader);
-      if (user && user.userId) {
-        // Check if the product is favorited by the user
-        isFavorite = await this.favoriteService.isFavorite(
-          user.userId,
-          productCode
+    // Check if the product is favorited by the user
+    let isFavorite = null;
+    let customerProductStatus = null;
+    if (userId) {
+      isFavorite = await this.favoriteService.isFavorite(userId, productCode);
+      // Get user phone from users table
+      const branchRepo = this.productService['productBranchRepository'].manager;
+      const userResult = await branchRepo.query(
+        `SELECT phone FROM "user" WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      let userPhone: string | undefined = undefined;
+      if (
+        Array.isArray(userResult) &&
+        userResult.length > 0 &&
+        userResult[0] &&
+        typeof userResult[0] === 'object' &&
+        Object.prototype.hasOwnProperty.call(userResult[0], 'phone')
+      ) {
+        userPhone = (userResult[0] as Record<string, any>)['phone'];
+      }
+      if (userPhone) {
+        // Now check in customer_products for this phone and productCode
+        const statusResult = await branchRepo.query(
+          `SELECT * FROM customer_products WHERE phone = $1 AND $2 = ANY(product_code) LIMIT 1`,
+          [userPhone, productCode]
         );
+        if (Array.isArray(statusResult) && statusResult.length > 0) {
+          const firstResult = statusResult[0];
+          if (
+            firstResult &&
+            typeof firstResult === 'object' &&
+            Object.prototype.hasOwnProperty.call(firstResult, 'status')
+          ) {
+            customerProductStatus = (firstResult as { status: any }).status;
+          } else {
+            customerProductStatus = true;
+          }
+        } else {
+          customerProductStatus = false;
+        }
+      } else {
+        customerProductStatus = false;
       }
     }
 
@@ -474,6 +519,7 @@ export class ProductController implements OnModuleInit {
       branches,
       store,
       isFavorite,
+      customerProductStatus,
     };
   }
 }

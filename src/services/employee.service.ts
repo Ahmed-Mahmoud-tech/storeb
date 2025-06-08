@@ -271,7 +271,23 @@ export class EmployeeService {
   }> {
     const page = options?.page || 1;
     const limit = options?.limit || 10;
-    const search = options?.search;
+
+    // Handle the case where "+" in URL query is converted to space
+    const rawSearch = options?.search;
+    let search;
+
+    if (rawSearch) {
+      // If search starts with a space (which could be a "+" from URL)
+      // and is followed by a number, assume it was "+number"
+      if (rawSearch.startsWith(' ') && /^\s+\d/.test(rawSearch)) {
+        search = '+' + rawSearch.trim();
+      } else {
+        search = decodeURIComponent(rawSearch);
+      }
+    }
+
+    console.log(search, 'search');
+
     const fromUserId = options?.fromUserId;
     const toUserId = options?.toUserId;
     const status = options?.status;

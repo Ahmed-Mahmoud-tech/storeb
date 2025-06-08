@@ -42,7 +42,7 @@ export class CustomerProductController {
    */
   @Get()
   async findAll(
-    @Query('search') search?: string,
+    @Query('search') rawSearch?: string,
     @Query('searchType') searchType?: 'product' | 'phone' | 'employee',
     @Query('storeName') storeName?: string,
     @Query('page') page: string = '1',
@@ -53,6 +53,18 @@ export class CustomerProductController {
     page: number;
     limit: number;
   }> {
+    // Handle the case where "+" in URL query is converted to space
+    let search = rawSearch;
+    if (search) {
+      // If search starts with a space (which could be a "+" from URL)
+      // and is followed by a number, assume it was "+number"
+      if (search.startsWith(' ') && /^\s+\d/.test(search)) {
+        search = '+' + search.trim();
+      } else {
+        search = decodeURIComponent(search);
+      }
+    }
+
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 10;
     return this.customerProductService.findAll(
