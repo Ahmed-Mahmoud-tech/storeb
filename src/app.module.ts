@@ -34,6 +34,9 @@ import { CustomerProductController } from './controller/customer_product.control
 import { Favorite } from './model/favorite.model';
 import { FavoriteService } from './services/favorite.service';
 import { FavoriteController } from './controller/favorite.controller';
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
+import 'winston-daily-rotate-file';
 
 @Module({
   imports: [
@@ -106,6 +109,52 @@ import { FavoriteController } from './controller/favorite.controller';
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
       signOptions: { expiresIn: '7d' },
+    }),
+    WinstonModule.forRoot({
+      transports: [
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.timestamp(),
+            winston.format.printf((info) => {
+              const timestamp =
+                typeof info.timestamp === 'string' ? info.timestamp : '';
+              const level = typeof info.level === 'string' ? info.level : '';
+              const context =
+                typeof info.context === 'string' ? info.context : '';
+              let message = '';
+              if (typeof info.message === 'string') {
+                message = info.message;
+              } else if (info.message !== undefined) {
+                try {
+                  message = JSON.stringify(info.message);
+                } catch {
+                  message = Object.prototype.toString.call(info.message);
+                }
+              }
+              return `${timestamp} [${level}]${context ? ' [' + context + ']' : ''}: ${message}`;
+            })
+          ),
+        }),
+        new winston.transports.DailyRotateFile({
+          dirname: 'logs/combined',
+          filename: '%DATE%-combined.log',
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '14d',
+          level: 'info',
+        }),
+        new winston.transports.DailyRotateFile({
+          dirname: 'logs/error',
+          filename: '%DATE%-error.log',
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '30d',
+          level: 'error',
+        }),
+      ],
     }),
   ],
   controllers: [

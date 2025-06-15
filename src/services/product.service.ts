@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Logger, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Product } from '../model/product.model';
@@ -9,6 +9,8 @@ import { FavoriteService } from './favorite.service';
 
 @Injectable()
 export class ProductService {
+  private readonly logger = new Logger(ProductService.name);
+
   constructor(
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
@@ -19,6 +21,7 @@ export class ProductService {
   ) {}
 
   async createProduct(createProductDto: CreateProductDto): Promise<Product> {
+    this.logger.log(`Creating product: ${createProductDto.product_name}`);
     const {
       product_code,
       product_name,
@@ -110,6 +113,7 @@ export class ProductService {
     sale?: boolean,
     userId?: string
   ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
+    this.logger.log('Fetching all products');
     let query = this.productRepository.createQueryBuilder('product');
 
     if (status) {
@@ -118,11 +122,11 @@ export class ProductService {
           query = query.andWhere('product.status IN (:...statuses)', {
             statuses: status,
           });
-          console.log('Filtering by multiple statuses:', status);
+          this.logger.log('Filtering by multiple statuses:', status);
         }
       } else {
         query = query.andWhere('product.status = :status', { status });
-        console.log('Filtering by single status:', status);
+        this.logger.log('Filtering by single status:', status);
       }
     }
 
@@ -138,10 +142,10 @@ export class ProductService {
       // Convert to array if it's a string, or use as-is if already an array
       if (Array.isArray(tag)) {
         tagsToFilter = tag;
-        console.log('Tags received as array:', tagsToFilter);
+        this.logger.log('Tags received as array:', tagsToFilter);
       } else {
         tagsToFilter = [tag];
-        console.log(
+        this.logger.log(
           'Tags received as string, converted to array:',
           tagsToFilter
         );
@@ -149,7 +153,7 @@ export class ProductService {
 
       // Apply each tag as a separate WHERE condition (AND logic)
       tagsToFilter.forEach((t, idx) => {
-        console.log(`Adding filter for tag${idx}:`, t);
+        this.logger.log(`Adding filter for tag${idx}:`, t);
         // Use parameter binding with explicit casting
         query = query.andWhere(`cast(:tag${idx} as text) = ANY(product.tags)`, {
           [`tag${idx}`]: t,
@@ -212,7 +216,7 @@ export class ProductService {
       .limit(limit)
       .offset(offset)
       .getMany();
-    console.log(userId, 'userId in product service');
+    this.logger.log(userId, 'userId in product service');
 
     // Add isFavorite flag if userId is provided
     if (userId) {
@@ -237,6 +241,7 @@ export class ProductService {
     limit: number = 10,
     offset: number = 0
   ): Promise<Product[]> {
+    this.logger.log('Fetching products by branch');
     const productBranches = await this.productBranchRepository.find({
       where: { branch_id: branchId },
       take: limit,
@@ -291,6 +296,7 @@ export class ProductService {
     product_code: string,
     updateProductDto: UpdateProductDto
   ): Promise<Product> {
+    this.logger.log(`Updating product: ${product_code}`);
     const product = await this.findOne(product_code);
 
     // Update product properties
@@ -388,7 +394,7 @@ export class ProductService {
   }
   async remove(product_code: string): Promise<void> {
     const product = await this.findOne(product_code);
-    console.log(product, 'product in remove method');
+    this.logger.log(`Removing product: ${product_code}`, product);
 
     // First delete any favorites referencing this product
     try {
@@ -398,7 +404,7 @@ export class ProductService {
         product_code,
       ]);
     } catch (error) {
-      console.error('Error deleting favorites:', error);
+      this.logger.error('Error deleting favorites:', error);
       // Continue with deletion even if this fails as the main delete might still work
     }
 

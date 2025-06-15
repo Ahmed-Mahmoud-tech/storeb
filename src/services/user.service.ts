@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 // import { JwtService } from '@nestjs/jwt';
 
 import { CreateUserDto, UpdateUserDto } from '../dto/user.dto';
@@ -9,6 +9,8 @@ import { User } from '../model/users.model';
 
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     // private readonly jwtService: JwtService,
     @InjectRepository(User) private readonly userRepository: Repository<User>
@@ -20,6 +22,7 @@ export class UserService {
    * @returns A promise that resolves to a success message.
    */
   async createUser(createUserDto: CreateUserDto): Promise<User> {
+    this.logger.log(`Creating user with email: ${createUserDto.email}`);
     const user = this.userRepository.create(createUserDto);
     try {
       return await this.userRepository.save(user);
@@ -37,6 +40,7 @@ export class UserService {
    * @returns A promise that resolves to the user or null if not found.
    */
   async findUserByPhone(phone: string): Promise<User | null> {
+    this.logger.log(`Finding user by phone: ${phone}`);
     return await this.userRepository.findOne({ where: { phone } });
   }
 
@@ -45,6 +49,7 @@ export class UserService {
    * @returns A promise that resolves to an array of users.
    */
   async getAllUsers(): Promise<User[]> {
+    this.logger.log('Fetching all users');
     return await this.userRepository.find();
   }
 
@@ -54,6 +59,7 @@ export class UserService {
    * @returns A promise that resolves to the user or throws an exception if not found.
    */
   async getUserById(id: string): Promise<User> {
+    this.logger.log(`Fetching user by id: ${id}`);
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
@@ -67,6 +73,7 @@ export class UserService {
    * @returns A promise that resolves to the user or null if not found.
    */
   async findUserByEmail(email: string): Promise<User | null> {
+    this.logger.log(`Finding user by email: ${email}`);
     return await this.userRepository.findOne({ where: { email } });
   }
 
@@ -77,6 +84,7 @@ export class UserService {
    * @returns A promise that resolves to the updated user.
    */
   async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User> {
+    this.logger.log(`Updating user with id: ${id}`);
     try {
       console.log(id, '4444444444444444', updateUserDto);
 
@@ -121,6 +129,7 @@ export class UserService {
    * @returns A promise that resolves to a success message.
    */
   async deleteUser(id: string): Promise<string> {
+    this.logger.log(`Deleting user with id: ${id}`);
     const user = await this.getUserById(id);
     await this.userRepository.remove(user);
     return 'User deleted successfully';

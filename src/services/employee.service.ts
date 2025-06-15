@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Logger, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Employee } from '../model/employees.model';
@@ -10,6 +10,8 @@ import { Store } from '../model/store.model';
 
 @Injectable()
 export class EmployeeService {
+  private readonly logger = new Logger(EmployeeService.name);
+
   constructor(
     @InjectRepository(Employee)
     private employeeRepository: Repository<Employee>,
@@ -27,6 +29,11 @@ export class EmployeeService {
    */ async createEmployee(
     createEmployeeDto: CreateEmployeeDto
   ): Promise<Employee> {
+    this.logger.log(
+      `Creating employee for user: ${
+        createEmployeeDto.to_user_id || createEmployeeDto.phone
+      }`
+    );
     // Check if phone exists but to_user_id doesn't - check if user exists
     let user: User | undefined;
     if (createEmployeeDto.phone && !createEmployeeDto.to_user_id) {
@@ -95,6 +102,7 @@ export class EmployeeService {
    * Find all employees
    */
   async findAllEmployees(): Promise<Employee[]> {
+    this.logger.log('Fetching all employees');
     return await this.employeeRepository.find();
   }
 
@@ -103,6 +111,7 @@ export class EmployeeService {
    * @param id - Employee ID
    */
   async findEmployeeById(id: string): Promise<Employee> {
+    this.logger.log(`Fetching employee by id: ${id}`);
     const employee = await this.employeeRepository.findOne({ where: { id } });
     if (!employee) {
       throw new NotFoundException(`Employee with ID ${id} not found`);
@@ -148,6 +157,7 @@ export class EmployeeService {
     id: string,
     updateEmployeeDto: UpdateEmployeeDto
   ): Promise<Employee> {
+    this.logger.log(`Updating employee with id: ${id}`);
     const employee = await this.findEmployeeById(id);
 
     // Extract branches from DTO

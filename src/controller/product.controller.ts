@@ -13,6 +13,7 @@ import {
   OnModuleInit,
   NotFoundException,
   Req,
+  Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ProductService } from '../services/product.service';
@@ -27,6 +28,8 @@ import { FormDataHelper } from '../utils/form-data.helper';
 
 @Controller('products')
 export class ProductController implements OnModuleInit {
+  private readonly logger = new Logger(ProductController.name);
+
   constructor(
     private readonly productService: ProductService,
     private readonly fileUploadService: FileUploadService,
@@ -34,6 +37,7 @@ export class ProductController implements OnModuleInit {
   ) {}
 
   onModuleInit() {
+    this.logger.log('ProductController module initialized');
     // Ensure upload directories exist when the application starts
     this.fileUploadService.ensureUploadDirectories();
   }
@@ -52,9 +56,9 @@ export class ProductController implements OnModuleInit {
     @UploadedFiles()
     files: { images?: Express.Multer.File[] }
   ): Promise<Product> {
-    console.log('Create product endpoint called');
-    console.log('Files received:', files);
-    console.log('DTO received:', dto);
+    this.logger.log('Create product endpoint called');
+    this.logger.log('Files received:', files);
+    this.logger.log('DTO received:', dto);
     try {
       // Create a type-safe DTO object
       const createProductDto = new CreateProductDto();
@@ -64,7 +68,7 @@ export class ProductController implements OnModuleInit {
         dto.product_code
       );
 
-      console.log(createProductDto.product_code, 'product_code');
+      this.logger.log(createProductDto.product_code, 'product_code');
 
       if (!createProductDto.product_code) {
         throw new BadRequestException(
@@ -95,9 +99,14 @@ export class ProductController implements OnModuleInit {
         []
       );
 
-      console.log(dto.tags, 'sssssssssssssssss000');
+      this.logger.log(dto.tags, 'sssssssssssssssss000');
       createProductDto.tags = FormDataHelper.parseIfJSON(dto.tags, {});
-      console.log(dto.tags, 'sssssssssssssssss', createProductDto.tags, '444');
+      this.logger.log(
+        dto.tags,
+        'sssssssssssssssss',
+        createProductDto.tags,
+        '444'
+      );
 
       // Handle product images if uploaded
       const imageUrls: string[] = [];
@@ -126,7 +135,7 @@ export class ProductController implements OnModuleInit {
       const exists = await this.productService.productExists(
         createProductDto.product_code
       );
-      console.log(createProductDto.product_code, 'exists:', exists);
+      this.logger.log(createProductDto.product_code, 'exists:', exists);
 
       if (exists && createProductDto.product_code !== undefined) {
         throw new BadRequestException('Product with this code already exists');
@@ -165,11 +174,11 @@ export class ProductController implements OnModuleInit {
   ) {
     // Get user ID from authorization token
     const authHeader = req.headers.authorization;
-    console.log('Auth header found:', authHeader);
+    this.logger.log('Auth header found:', authHeader);
 
     const user = AuthHelper.extractUserIdFromToken(authHeader);
     if (user) {
-      console.log('User ID extracted from token:', user);
+      this.logger.log('User ID extracted from token:', user);
     }
 
     // Convert createdBy to boolean
@@ -222,7 +231,7 @@ export class ProductController implements OnModuleInit {
   ) {
     try {
       const product = await this.productService.findOne(productCode);
-      console.log('authHeader', 'Auth header in findOne');
+      this.logger.log('authHeader', 'Auth header in findOne');
 
       // Get branch IDs for this product
       const branchIds =
@@ -276,7 +285,7 @@ export class ProductController implements OnModuleInit {
     @UploadedFiles()
     files: { images?: Express.Multer.File[] }
   ) {
-    console.log(dto, 'Update product DTO:');
+    this.logger.log(dto, 'Update product DTO:');
 
     try {
       // Verify product exists
@@ -332,7 +341,7 @@ export class ProductController implements OnModuleInit {
       if (!dto.removeImages) {
         dto.removeImages = [];
       }
-      console.log(dto.removeImages, 'removeImages');
+      this.logger.log(dto.removeImages, 'removeImages');
 
       // Handle image removal if specified
       const imagesToRemove = FormDataHelper.parseIfJSON<string[]>(
@@ -343,7 +352,7 @@ export class ProductController implements OnModuleInit {
       // Delete the files from the upload folder and remove from DB
       for (const image of imagesToRemove) {
         const deletionResult = this.fileUploadService.deleteFile(image);
-        console.log(
+        this.logger.log(
           `Attempting to delete file: ${image}, Success: ${deletionResult}`
         );
       }

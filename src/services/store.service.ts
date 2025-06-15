@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Logger, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Store } from '../model/store.model';
@@ -10,6 +10,8 @@ import { FileUploadService } from './file-upload.service';
 
 @Injectable()
 export class StoreService {
+  private readonly logger = new Logger(StoreService.name);
+
   constructor(
     @InjectRepository(Store)
     private storeRepository: Repository<Store>,
@@ -21,6 +23,7 @@ export class StoreService {
   //   console.log(createStoreDto, 'createStoreDto');
   // }
   async createStore(createStoreDto: CreateStoreDto): Promise<Store> {
+    this.logger.log(`Creating store: ${createStoreDto.storeName}`);
     const {
       storeName,
       logo,

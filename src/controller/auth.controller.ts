@@ -6,6 +6,7 @@ import {
   HttpStatus,
   HttpException,
   Res,
+  Logger,
 } from '@nestjs/common';
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
@@ -25,6 +26,8 @@ interface JwtRequestUser extends ExpressRequest {
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService
@@ -32,8 +35,9 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(PassportAuthGuard('google'))
-  async googleLogin(): Promise<void> {
+  googleLogin(): void {
     // Initiates Google OAuth login
+    this.logger.log('Google login initiated');
   }
   @Get('profile')
   @UseGuards(JwtAuthGuard)
@@ -43,6 +47,7 @@ export class AuthController {
     if (!userId) {
       throw new HttpException('User ID not found', HttpStatus.BAD_REQUEST);
     }
+    this.logger.log(`Fetching profile for user ID: ${userId}`);
     return this.userService.getUserById(userId);
   }
 
@@ -74,12 +79,15 @@ export class AuthController {
           email,
           type: 'client', // Default role, you might want to customize this
         });
+        this.logger.log(`New user created: ${email}`);
       } catch {
         throw new HttpException(
           'Failed to create user from Google OAuth',
           HttpStatus.INTERNAL_SERVER_ERROR
         );
       }
+    } else {
+      this.logger.log(`User logged in: ${email}`);
     }
 
     // Generate JWT token
@@ -95,7 +103,7 @@ export class AuthController {
     );
 
     // Debug the cookie headers
-    console.log(req.headers.cookie, 'cookie0000');
+    this.logger.log(`Cookie headers: ${req.headers.cookie}`);
 
     // Safely parse cookies only if they exist
     let redirectLink = '';
@@ -109,14 +117,14 @@ export class AuthController {
           redirectSection = cookies.section || '';
         }
         // Log cookie values for debugging
-        console.log('Cookies:', cookies);
-        console.log('redirectLink:', redirectLink);
-        console.log('redirectSection:', redirectSection);
+        this.logger.log('Cookies:', cookies);
+        this.logger.log('redirectLink:', redirectLink);
+        this.logger.log('redirectSection:', redirectSection);
       } else {
-        console.log('No cookies found in request');
+        this.logger.log('No cookies found in request');
       }
     } catch (error) {
-      console.error('Error parsing cookies:', error);
+      this.logger.error('Error parsing cookies:', error);
     }
 
     // Provide sensible defaults if cookies are missing or empty
@@ -164,6 +172,7 @@ export class AuthController {
       redirectUrl += `?section=${encodeURIComponent(redirectSection)}`;
     }
 
+    this.logger.log(`Redirecting to: ${redirectUrl}`);
     return res.redirect(redirectUrl);
     // res.status(HttpStatus.OK).json({
     //   message: 'Successfully authenticated with Google',
@@ -186,6 +195,7 @@ export class AuthController {
       path: '/',
     });
 
+    this.logger.log('User logged out');
     return res
       .status(HttpStatus.OK)
       .json({ message: 'Logged out successfully' });

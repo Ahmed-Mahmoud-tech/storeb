@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Logger, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CustomerProduct } from '../model/customer_products.model';
@@ -11,12 +11,15 @@ import { Product } from '../model/product.model';
 
 @Injectable()
 export class CustomerProductService {
+  private readonly logger = new Logger(CustomerProductService.name);
+
   constructor(
     @InjectRepository(CustomerProduct)
     private customerProductRepository: Repository<CustomerProduct>,
     private productService: ProductService
   ) {}
   async create(createDto: CreateCustomerProductDto): Promise<CustomerProduct> {
+    this.logger.log('Creating customer product');
     // employee field is now required
     const entity = this.customerProductRepository.create({
       phone: createDto.phone,
@@ -38,6 +41,7 @@ export class CustomerProductService {
     page: number;
     limit: number;
   }> {
+    this.logger.log('Finding all customer products');
     const queryBuilder = this.customerProductRepository
       .createQueryBuilder('customerProduct')
       .leftJoinAndSelect('customerProduct.employeeUser', 'employee')
@@ -128,6 +132,7 @@ export class CustomerProductService {
   async findOne(
     id: string
   ): Promise<CustomerProduct & { productDetails?: Product[] }> {
+    this.logger.log(`Finding customer product with id ${id}`);
     const entity = await this.customerProductRepository.findOne({
       where: { id },
       relations: ['employeeUser', 'branch'],
@@ -151,6 +156,7 @@ export class CustomerProductService {
   async findByPhone(
     phone: string
   ): Promise<CustomerProduct & { productDetails?: Product[] }> {
+    this.logger.log(`Finding customer product with phone ${phone}`);
     const entity = await this.customerProductRepository.findOne({
       where: { phone },
       relations: ['employeeUser', 'branch'],
@@ -174,6 +180,7 @@ export class CustomerProductService {
     id: string,
     updateDto: UpdateCustomerProductDto
   ): Promise<CustomerProduct> {
+    this.logger.log(`Updating customer product with id ${id}`);
     // employee field is now optional
     const entity = await this.findOne(id);
     // Remove productDetails property before saving as it's not part of the entity
@@ -184,6 +191,7 @@ export class CustomerProductService {
   }
 
   async remove(id: string): Promise<void> {
+    this.logger.log(`Removing customer product with id ${id}`);
     const entity = await this.findOne(id);
     await this.customerProductRepository.remove(entity);
   }

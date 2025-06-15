@@ -3,6 +3,7 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +13,8 @@ import { ProductService } from './product.service';
 
 @Injectable()
 export class FavoriteService {
+  private readonly logger = new Logger(FavoriteService.name);
+
   constructor(
     @InjectRepository(Favorite)
     private favoriteRepository: Repository<Favorite>,
@@ -20,15 +23,18 @@ export class FavoriteService {
   ) {}
 
   async create(createFavoriteDto: CreateFavoriteDto): Promise<Favorite> {
+    this.logger.log(`Creating favorite: ${JSON.stringify(createFavoriteDto)}`);
     const favorite = this.favoriteRepository.create(createFavoriteDto);
     return await this.favoriteRepository.save(favorite);
   }
 
   async findAll(): Promise<Favorite[]> {
+    this.logger.log('Fetching all favorites');
     return await this.favoriteRepository.find();
   }
 
   async findOne(id: string): Promise<Favorite> {
+    this.logger.log(`Fetching favorite with id: ${id}`);
     const favorite = await this.favoriteRepository.findOne({ where: { id } });
     if (!favorite) throw new NotFoundException('Favorite not found');
     return favorite;
@@ -38,12 +44,14 @@ export class FavoriteService {
     id: string,
     updateFavoriteDto: UpdateFavoriteDto
   ): Promise<Favorite> {
+    this.logger.log(`Updating favorite with id: ${id}`);
     const favorite = await this.findOne(id);
     Object.assign(favorite, updateFavoriteDto);
     return await this.favoriteRepository.save(favorite);
   }
 
   async remove(id: string): Promise<void> {
+    this.logger.log(`Removing favorite with id: ${id}`);
     const favorite = await this.findOne(id);
     await this.favoriteRepository.remove(favorite);
   }
@@ -52,6 +60,9 @@ export class FavoriteService {
     user_id: string,
     product: string
   ): Promise<void> {
+    this.logger.log(
+      `Removing favorite for user ${user_id} and product ${product}`
+    );
     const favorite = await this.favoriteRepository.findOne({
       where: { user_id, product },
     });
@@ -61,6 +72,7 @@ export class FavoriteService {
 
   // Get user's favorites by user_id
   async findByUserId(user_id: string): Promise<Favorite[]> {
+    this.logger.log(`Fetching favorites for user_id: ${user_id}`);
     return await this.favoriteRepository.find({
       where: { user_id },
     });
@@ -68,6 +80,9 @@ export class FavoriteService {
 
   // Check if a product is favorite for a specific user
   async isFavorite(user_id: string, product: string): Promise<string | null> {
+    this.logger.log(
+      `Checking if product ${product} is favorite for user ${user_id}`
+    );
     const favorite = await this.favoriteRepository.findOne({
       where: { user_id, product },
     });
@@ -80,6 +95,9 @@ export class FavoriteService {
     page: number = 1,
     limit: number = 10
   ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
+    this.logger.log(
+      `Fetching products for user_id: ${user_id}, page: ${page}, limit: ${limit}`
+    );
     const skip = (page - 1) * limit;
 
     // Find all favorites for the user
