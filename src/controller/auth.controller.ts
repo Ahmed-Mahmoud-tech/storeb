@@ -162,7 +162,7 @@ export class AuthController {
     //   })
     // );
     // Build redirect URL safely
-    const baseUrl = 'http://localhost:3000';
+    const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';
     let redirectUrl = baseUrl;
     if (redirectLink) {
       redirectUrl += `/${redirectLink}`;
