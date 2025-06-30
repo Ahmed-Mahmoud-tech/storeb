@@ -42,7 +42,7 @@ import 'winston-daily-rotate-file';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
+      envFilePath: `.env.${process.env.NODE_ENV || 'production'}`,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

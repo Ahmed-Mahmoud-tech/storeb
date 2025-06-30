@@ -104,61 +104,30 @@ export class AuthController {
 
     // Debug the cookie headers
     this.logger.log(`Cookie headers: ${req.headers.cookie}`);
-    this.logger.log(`User-Agent: ${req.headers['user-agent']}`);
-    this.logger.log(`Origin: ${req.headers.origin}`);
-    this.logger.log(`Referer: ${req.headers.referer}`);
 
-    // Safely parse redirect info from state param, query params, or cookies
+    // Safely parse cookies only if they exist
     let redirectLink = '';
     let redirectSection = '';
 
-    // 1. Parse from OAuth state param if present
-    if (req.query.state) {
-      try {
-        const state = decodeURIComponent(req.query.state as string);
-        const params = new URLSearchParams(state);
-        if (params.get('redirectLink')) {
-          redirectLink = params.get('redirectLink')!;
+    try {
+      if (req.headers.cookie) {
+        const cookies = parse(req.headers.cookie);
+        if (typeof cookies === 'object' && cookies !== null) {
+          redirectLink = cookies.redirectLink || '';
+          redirectSection = cookies.section || '';
         }
-        if (params.get('section')) {
-          redirectSection = params.get('section')!;
-        }
-        this.logger.log('Parsed from state:', {
-          redirectLink,
-          redirectSection,
-        });
-      } catch (err) {
-        this.logger.error('Error parsing state param:', err);
+        // Log cookie values for debugging
+        this.logger.log('Cookies:', cookies);
+        this.logger.log('redirectLink:', redirectLink);
+        this.logger.log('redirectSection:', redirectSection);
+      } else {
+        this.logger.log('No cookies found in request');
       }
+    } catch (error) {
+      this.logger.error('Error parsing cookies:', error);
     }
 
-    // 2. Fallback to query params if not set by state
-    if (!redirectLink && req.query.redirectLink) {
-      redirectLink = req.query.redirectLink as string;
-    }
-    if (!redirectSection && req.query.section) {
-      redirectSection = req.query.section as string;
-    }
-
-    // 3. Fallback to cookies if still not set
-    if (!redirectLink || !redirectSection) {
-      try {
-        if (req.headers.cookie) {
-          const cookies = parse(req.headers.cookie);
-          if (!redirectLink) redirectLink = cookies.redirectLink || '';
-          if (!redirectSection) redirectSection = cookies.section || '';
-          this.logger.log('Cookies:', cookies);
-          this.logger.log('redirectLink:', redirectLink);
-          this.logger.log('redirectSection:', redirectSection);
-        } else {
-          this.logger.log('No cookies found in request');
-        }
-      } catch (error) {
-        this.logger.error('Error parsing cookies:', error);
-      }
-    }
-
-    // Provide sensible defaults if all sources are missing or empty
+    // Provide sensible defaults if cookies are missing or empty
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
@@ -167,7 +136,7 @@ export class AuthController {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: 'lax',
       path: '/',
     };
 
