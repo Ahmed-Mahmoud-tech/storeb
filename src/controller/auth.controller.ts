@@ -108,26 +108,45 @@ export class AuthController {
     this.logger.log(`Origin: ${req.headers.origin}`);
     this.logger.log(`Referer: ${req.headers.referer}`);
 
-    // Safely parse redirect info from query params or cookies
+    // Safely parse redirect info from state param, query params, or cookies
     let redirectLink = '';
     let redirectSection = '';
 
-    // Prefer query params over cookies for redirect info
-    if (req.query.redirectLink) {
+    // 1. Parse from OAuth state param if present
+    if (req.query.state) {
+      try {
+        const state = decodeURIComponent(req.query.state as string);
+        const params = new URLSearchParams(state);
+        if (params.get('redirectLink')) {
+          redirectLink = params.get('redirectLink')!;
+        }
+        if (params.get('section')) {
+          redirectSection = params.get('section')!;
+        }
+        this.logger.log('Parsed from state:', {
+          redirectLink,
+          redirectSection,
+        });
+      } catch (err) {
+        this.logger.error('Error parsing state param:', err);
+      }
+    }
+
+    // 2. Fallback to query params if not set by state
+    if (!redirectLink && req.query.redirectLink) {
       redirectLink = req.query.redirectLink as string;
     }
-    if (req.query.section) {
+    if (!redirectSection && req.query.section) {
       redirectSection = req.query.section as string;
     }
 
-    // Fallback to cookies if not present in query
+    // 3. Fallback to cookies if still not set
     if (!redirectLink || !redirectSection) {
       try {
         if (req.headers.cookie) {
           const cookies = parse(req.headers.cookie);
           if (!redirectLink) redirectLink = cookies.redirectLink || '';
           if (!redirectSection) redirectSection = cookies.section || '';
-          // Log cookie values for debugging
           this.logger.log('Cookies:', cookies);
           this.logger.log('redirectLink:', redirectLink);
           this.logger.log('redirectSection:', redirectSection);
@@ -139,7 +158,7 @@ export class AuthController {
       }
     }
 
-    // Provide sensible defaults if cookies and query params are missing or empty
+    // Provide sensible defaults if all sources are missing or empty
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
