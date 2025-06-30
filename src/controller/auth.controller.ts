@@ -104,6 +104,9 @@ export class AuthController {
 
     // Debug the cookie headers
     this.logger.log(`Cookie headers: ${req.headers.cookie}`);
+    this.logger.log(`User-Agent: ${req.headers['user-agent']}`);
+    this.logger.log(`Origin: ${req.headers.origin}`);
+    this.logger.log(`Referer: ${req.headers.referer}`);
 
     // Safely parse cookies only if they exist
     let redirectLink = '';
@@ -128,15 +131,15 @@ export class AuthController {
     }
 
     // Provide sensible defaults if cookies are missing or empty
-    if (!redirectLink) redirectLink = '';
-    if (!redirectSection) redirectSection = '';
+    if (!redirectLink) redirectLink = 'en/new-account';
+    if (!redirectSection) redirectSection = 'owner';
 
     // Set JWT token as an HTTP-only cookie
     const cookieOptions: CookieOptions = {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
     };
 
