@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
-import { Response, Request as ExpressRequest, CookieOptions } from 'express';
+import { Response, Request as ExpressRequest } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GoogleAuthGuard } from '../auth/google-auth.guard';
@@ -140,7 +140,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
       sameSite: 'lax', // Use 'none' if cross-site and secure is true
       path: '/',
-      // domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
+      domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
     });
     res.cookie(
       'user',
@@ -156,7 +156,7 @@ export class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         sameSite: 'lax',
         path: '/',
-        // domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
+        domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
       }
     );
 
