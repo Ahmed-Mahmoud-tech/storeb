@@ -11,9 +11,10 @@ import {
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
 import { Response, Request as ExpressRequest, CookieOptions } from 'express';
-import { parse } from 'cookie';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { GoogleAuthGuard } from '../auth/google-auth.guard';
+
 // Extended request interface to include user from Passport and cookies
 interface RequestWithUser extends ExpressRequest {
   user: { email: string; name: string; accessToken: string };
@@ -34,7 +35,7 @@ export class AuthController {
   ) {}
 
   @Get('google')
-  @UseGuards(PassportAuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   googleLogin(): void {
     // Initiates Google OAuth login
     this.logger.log('Google login initiated');
@@ -105,29 +106,30 @@ export class AuthController {
     // Debug the cookie headers
     this.logger.log(`Cookie headers: ${req.headers.cookie}`);
 
-    // Safely parse cookies only if they exist
+    // Parse redirect info from OAuth state param ONLY
     let redirectLink = '';
     let redirectSection = '';
 
-    try {
-      if (req.headers.cookie) {
-        const cookies = parse(req.headers.cookie);
-        if (typeof cookies === 'object' && cookies !== null) {
-          redirectLink = cookies.redirectLink || '';
-          redirectSection = cookies.section || '';
+    if (req.query.state) {
+      try {
+        const state = decodeURIComponent(req.query.state as string);
+        const params = new URLSearchParams(state);
+        if (params.get('redirectLink')) {
+          redirectLink = params.get('redirectLink')!;
         }
-        // Log cookie values for debugging
-        this.logger.log('Cookies:', cookies);
-        this.logger.log('redirectLink:', redirectLink);
-        this.logger.log('redirectSection:', redirectSection);
-      } else {
-        this.logger.log('No cookies found in request');
+        if (params.get('section')) {
+          redirectSection = params.get('section')!;
+        }
+        this.logger.log('Parsed from state:', {
+          redirectLink,
+          redirectSection,
+        });
+      } catch (err) {
+        this.logger.error('Error parsing state param:', err);
       }
-    } catch (error) {
-      this.logger.error('Error parsing cookies:', error);
     }
 
-    // Provide sensible defaults if cookies are missing or empty
+    // Provide sensible defaults if state is missing or empty
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
