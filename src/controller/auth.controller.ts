@@ -108,29 +108,38 @@ export class AuthController {
     this.logger.log(`Origin: ${req.headers.origin}`);
     this.logger.log(`Referer: ${req.headers.referer}`);
 
-    // Safely parse cookies only if they exist
+    // Safely parse redirect info from query params or cookies
     let redirectLink = '';
     let redirectSection = '';
 
-    try {
-      if (req.headers.cookie) {
-        const cookies = parse(req.headers.cookie);
-        if (typeof cookies === 'object' && cookies !== null) {
-          redirectLink = cookies.redirectLink || '';
-          redirectSection = cookies.section || '';
-        }
-        // Log cookie values for debugging
-        this.logger.log('Cookies:', cookies);
-        this.logger.log('redirectLink:', redirectLink);
-        this.logger.log('redirectSection:', redirectSection);
-      } else {
-        this.logger.log('No cookies found in request');
-      }
-    } catch (error) {
-      this.logger.error('Error parsing cookies:', error);
+    // Prefer query params over cookies for redirect info
+    if (req.query.redirectLink) {
+      redirectLink = req.query.redirectLink as string;
+    }
+    if (req.query.section) {
+      redirectSection = req.query.section as string;
     }
 
-    // Provide sensible defaults if cookies are missing or empty
+    // Fallback to cookies if not present in query
+    if (!redirectLink || !redirectSection) {
+      try {
+        if (req.headers.cookie) {
+          const cookies = parse(req.headers.cookie);
+          if (!redirectLink) redirectLink = cookies.redirectLink || '';
+          if (!redirectSection) redirectSection = cookies.section || '';
+          // Log cookie values for debugging
+          this.logger.log('Cookies:', cookies);
+          this.logger.log('redirectLink:', redirectLink);
+          this.logger.log('redirectSection:', redirectSection);
+        } else {
+          this.logger.log('No cookies found in request');
+        }
+      } catch (error) {
+        this.logger.error('Error parsing cookies:', error);
+      }
+    }
+
+    // Provide sensible defaults if cookies and query params are missing or empty
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
