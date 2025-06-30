@@ -133,16 +133,15 @@ export class AuthController {
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
-    // Set JWT token as an HTTP-only cookie
-    const cookieOptions: CookieOptions = {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-      sameSite: 'lax',
+    // Set cookies with proper options for cross-site and browser visibility
+    res.cookie('auth_token', token, {
+      httpOnly: false, // Set to true if you do not need JS access
+      secure: false, // Set to true only in production with HTTPS
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax', // Use 'none' if cross-site and secure is true
       path: '/',
-    };
-
-    res.cookie('auth_token', token, cookieOptions);
+      // domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
+    });
     res.cookie(
       'user',
       JSON.stringify({
@@ -151,7 +150,14 @@ export class AuthController {
         email: user.email,
         type: user.type,
       }),
-      cookieOptions
+      {
+        httpOnly: false, // Allow JS access if needed
+        secure: false, // Set to true only in production with HTTPS
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: 'lax',
+        path: '/',
+        // domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
+      }
     );
 
     // // Sanitize and encode user data for URL
