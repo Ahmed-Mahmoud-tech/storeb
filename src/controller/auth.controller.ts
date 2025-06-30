@@ -133,50 +133,27 @@ export class AuthController {
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
-    // Set cookies for cross-site usage (frontend and backend on different servers)
-    res.cookie('auth_token', token, {
-      httpOnly: false, // Set to true if you do not need JS access
-      secure: true, // Must be true for cross-site cookies (requires HTTPS)
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: 'none', // Required for cross-site cookies
-      path: '/',
-    });
-    res.cookie(
-      'user',
+    // Instead of setting cookies, redirect with token and user info in the URL
+    const encodedUser = encodeURIComponent(
       JSON.stringify({
         id: user.id,
         name: user.name,
         email: user.email,
         type: user.type,
-      }),
-      {
-        httpOnly: false,
-        secure: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: 'none',
-        path: '/',
-      }
+      })
     );
-
-    // // Sanitize and encode user data for URL
-    // const encodedUser = encodeURIComponent(
-    //   JSON.stringify({
-    //     id: user.id,
-    //     name: user.name,
-    //     email: user.email,
-    //     type: user.type,
-    //   })
-    // );
-    // Build redirect URL safely
     const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';
     let redirectUrl = baseUrl;
     if (redirectLink) {
       redirectUrl += `/${redirectLink}`;
     }
-    // redirectUrl += `?user=${encodedUser}`;
+    const params = new URLSearchParams();
+    params.set('token', token);
+    params.set('user', encodedUser);
     if (redirectSection) {
-      redirectUrl += `?section=${encodeURIComponent(redirectSection)}`;
+      params.set('section', redirectSection);
     }
+    redirectUrl += `?${params.toString()}`;
 
     this.logger.log(`Redirecting to: ${redirectUrl}`);
     return res.redirect(redirectUrl);
