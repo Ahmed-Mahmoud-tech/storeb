@@ -133,14 +133,13 @@ export class AuthController {
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
-    // Set cookies with proper options for cross-site and browser visibility
+    // Set cookies for cross-site usage (frontend and backend on different servers)
     res.cookie('auth_token', token, {
       httpOnly: false, // Set to true if you do not need JS access
-      secure: false, // Set to true only in production with HTTPS
+      secure: true, // Must be true for cross-site cookies (requires HTTPS)
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: 'lax', // Use 'none' if cross-site and secure is true
+      sameSite: 'none', // Required for cross-site cookies
       path: '/',
-      domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
     });
     res.cookie(
       'user',
@@ -151,12 +150,11 @@ export class AuthController {
         type: user.type,
       }),
       {
-        httpOnly: false, // Allow JS access if needed
-        secure: false, // Set to true only in production with HTTPS
+        httpOnly: false,
+        secure: true,
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/',
-        domain: process.env.CLIENT_DOMAIN || undefined, // Uncomment and set if needed
       }
     );
 
