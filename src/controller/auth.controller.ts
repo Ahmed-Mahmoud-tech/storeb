@@ -131,8 +131,8 @@ export class AuthController {
     }
 
     // Provide sensible defaults if cookies are missing or empty
-    if (!redirectLink) redirectLink = 'en/new-account';
-    if (!redirectSection) redirectSection = 'owner';
+    if (!redirectLink) redirectLink = '';
+    if (!redirectSection) redirectSection = '';
 
     // Set JWT token as an HTTP-only cookie
     const cookieOptions: CookieOptions = {
