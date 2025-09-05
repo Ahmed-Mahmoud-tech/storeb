@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
+import { StoreService } from '../services/store.service';
 import { Response, Request as ExpressRequest } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -31,7 +32,8 @@ export class AuthController {
 
   constructor(
     private readonly userService: UserService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly storeService: StoreService
   ) {}
 
   @Get('google')
@@ -142,7 +144,41 @@ export class AuthController {
         type: user.type,
       })
     );
-    const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';
+
+    // Use store URL for business users (owner, manager, sales), client URL for others
+    const isBusinessUser = ['owner', 'manager', 'sales', 'employee'].includes(
+      user.type
+    );
+    let baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';
+    console.log(isBusinessUser, 'ddddddddddddddddd', user.type);
+
+    if (isBusinessUser) {
+      try {
+        let store: { name: string } | null = null;
+        // For owners, find their store
+        if (user.type === 'owner') {
+          store = await this.storeService.findStoreByOwnerId(user.id);
+        }
+        // For managers and sales, find their store through employee-branch relationships
+        else if (
+          user.type === 'manager' ||
+          user.type === 'sales' ||
+          user.type === 'employee'
+        ) {
+          store = await this.storeService.findStoreByEmployeeUserId(user.id);
+        }
+        console.log(store, 'dddddddddddd', store.name);
+
+        if (store && store.name) {
+          const storeNameForUrl = store.name.replace(/\s+/g, '_');
+          baseUrl = `${baseUrl}/en/store/${storeNameForUrl}`;
+        }
+      } catch (error) {
+        this.logger.error('Error fetching store for business user:', error);
+        // Fall back to client URL if store lookup fails
+      }
+    }
+
     let redirectUrl = baseUrl;
     if (redirectLink) {
       redirectUrl += `/${redirectLink}`;

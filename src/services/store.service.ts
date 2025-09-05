@@ -369,4 +369,75 @@ export class StoreService {
       }
     }
   }
+
+  async findStoreByOwnerId(ownerId: string): Promise<Store | null> {
+    this.logger.log(`Finding store by owner ID: ${ownerId}`);
+    return await this.storeRepository.findOne({
+      where: { owner_id: ownerId },
+    });
+  }
+  async findStoreByEmployeeUserId(userId: string): Promise<Store | null> {
+    this.logger.log(`Finding store by employee user ID: ${userId}`);
+
+    try {
+      // Find employee record where to_user_id matches the userId
+      const employee = await this.storeRepository.manager
+        .getRepository('employees')
+        .createQueryBuilder('e')
+        .where('e.to_user_id = :userId', { userId })
+        .getOne();
+
+      if (!employee) {
+        this.logger.log(`No employee record found for user ID: ${userId}`);
+        return null;
+      }
+
+      // Find branch assigned to this employee
+      const employeeBranch = await this.storeRepository.manager
+        .getRepository('employee_branches')
+        .createQueryBuilder('eb')
+        .where('eb.employee_id = :employeeId', { employeeId: employee.id })
+        .getOne();
+
+      if (!employeeBranch) {
+        this.logger.log(
+          `No branch assignment found for employee ID: ${employee.id}`
+        );
+        return null;
+      }
+
+      // Find branch details
+      const branch = await this.branchRepository.findOne({
+        where: { id: employeeBranch.branch_id },
+      });
+
+      if (!branch) {
+        this.logger.log(
+          `Branch not found with ID: ${employeeBranch.branch_id}`
+        );
+        return null;
+      }
+
+      // Find and return the store
+      const store = await this.storeRepository.findOne({
+        where: { id: branch.store_id },
+      });
+
+      if (store) {
+        this.logger.log(
+          `Found store ${store.name} for employee user ID: ${userId}`
+        );
+      } else {
+        this.logger.log(`Store not found with ID: ${branch.store_id}`);
+      }
+
+      return store;
+    } catch (error) {
+      this.logger.error(
+        `Error finding store for employee user ID ${userId}:`,
+        error
+      );
+      return null;
+    }
+  }
 }
