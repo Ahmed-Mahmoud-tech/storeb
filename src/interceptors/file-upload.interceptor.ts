@@ -17,7 +17,7 @@ import { MAX_FILE_SIZE } from '../services/file-upload.service';
 export function createFileFieldsInterceptor(
   fields: { name: string; maxCount: number }[]
 ) {
-  console.log('Creating FileFieldsInterceptor with fields:', fields);
+  // console.log('Creating FileFieldsInterceptor with fields:', fields);
   return FileFieldsInterceptor(fields, {
     storage: diskStorage({
       destination: (req, file, cb) => {

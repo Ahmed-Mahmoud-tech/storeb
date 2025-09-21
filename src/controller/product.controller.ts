@@ -180,6 +180,54 @@ export class ProductController implements OnModuleInit {
     if (user) {
       this.logger.log('User ID extracted from token:', user);
     }
+    console.log('444444444', category, 'tag in controller');
+    console.log('Raw tag received:', JSON.stringify(tag));
+    console.log('Tag type:', typeof tag);
+
+    // Handle URL decoding for category parameter
+    let processedCategory = category;
+    if (category) {
+      try {
+        console.log('Decoding category:', category);
+        processedCategory = decodeURIComponent(category);
+        console.log('Decoded category to:', processedCategory);
+      } catch (error) {
+        this.logger.warn(`Failed to decode category: ${category}`, error);
+        processedCategory = category;
+      }
+      this.logger.log('Original category parameter:', category);
+      this.logger.log('Processed category parameter:', processedCategory);
+    }
+
+    // Handle URL decoding for tag parameter
+    let processedTag = tag;
+    if (tag) {
+      // Ensure proper URL decoding for tags that might contain encoded characters
+      if (Array.isArray(tag)) {
+        processedTag = tag.map((t) => {
+          try {
+            console.log('Decoding array tag:', t);
+            const decoded = decodeURIComponent(t);
+            console.log('Decoded to:', decoded);
+            return decoded;
+          } catch (error) {
+            this.logger.warn(`Failed to decode tag: ${t}`, error);
+            return t;
+          }
+        });
+      } else {
+        try {
+          console.log('Decoding single tag:', tag);
+          processedTag = decodeURIComponent(tag);
+          console.log('Decoded to:', processedTag);
+        } catch (error) {
+          this.logger.warn(`Failed to decode tag: ${tag}`, error);
+          processedTag = tag;
+        }
+      }
+      this.logger.log('Original tag parameter:', tag);
+      this.logger.log('Processed tag parameter:', processedTag);
+    }
 
     // Convert createdBy to boolean
     const createdByBool = createdBy === 'true' || createdBy === '1';
@@ -190,8 +238,8 @@ export class ProductController implements OnModuleInit {
       limit ? +limit : 10,
       page ? +page : 1,
       status,
-      category,
-      tag,
+      processedCategory,
+      processedTag,
       branchId,
       storeId,
       search,

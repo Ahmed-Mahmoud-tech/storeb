@@ -42,7 +42,7 @@ import 'winston-daily-rotate-file';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: `.env.${process.env.NODE_ENV || 'production'}`,
+      envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -55,8 +55,8 @@ import 'winston-daily-rotate-file';
           host: configService.get('DB_HOST', 'localhost'),
           port: configService.get<number>('DB_PORT', 5432),
           username: configService.get('DB_USERNAME', 'postgres'),
-          password: configService.get('DB_PASSWORD', 'postgres'),
-          database: configService.get('DB_DATABASE', 'nest_app'),
+          password: configService.get('DB_PASSWORD', 'password'),
+          database: configService.get('DB_DATABASE', 'store2'),
           entities: [
             User,
             Store,
@@ -69,11 +69,11 @@ import 'winston-daily-rotate-file';
             CustomerProduct,
             Favorite,
           ],
-          synchronize: !isProduction, // Auto-create tables in dev only
+          synchronize: !isProduction, // Auto-create tables only in development
           logging: false, // Disable SQL logging completely
           maxQueryExecutionTime: 1000, // Log only slow queries (above 1000ms)
           uuidExtension: 'pgcrypto', // Use PostgreSQL 13+ native UUID
-          ssl: isProduction ? { rejectUnauthorized: false } : false,
+          ssl: isProduction, // Enable SSL in production
           extra: {
             connectionLimit: 10, // Connection pool size
             application_name: 'nest_app',

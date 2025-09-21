@@ -6,6 +6,7 @@ import { ProductBranch } from '../model/product_branches.model';
 import { CreateProductDto, UpdateProductDto } from '../dto/product.dto';
 import { FileUploadService } from './file-upload.service';
 import { FavoriteService } from './favorite.service';
+import { getMatchingColorTags } from '../utils/color.helper';
 
 @Injectable()
 export class ProductService {
@@ -129,38 +130,11 @@ export class ProductService {
         this.logger.log('Filtering by single status:', status);
       }
     }
-
     if (category) {
-      query = query.andWhere('product.category LIKE :category', {
+      query = query.andWhere('product.category SIMILAR TO :category', {
         category: `%${category}%`,
       });
     }
-    if (tag) {
-      // Support multiple tags (AND logic: product must have all tags)
-      let tagsToFilter: string[];
-
-      // Convert to array if it's a string, or use as-is if already an array
-      if (Array.isArray(tag)) {
-        tagsToFilter = tag;
-        this.logger.log('Tags received as array:', tagsToFilter);
-      } else {
-        tagsToFilter = [tag];
-        this.logger.log(
-          'Tags received as string, converted to array:',
-          tagsToFilter
-        );
-      }
-
-      // Apply each tag as a separate WHERE condition (AND logic)
-      tagsToFilter.forEach((t, idx) => {
-        this.logger.log(`Adding filter for tag${idx}:`, t);
-        // Use parameter binding with explicit casting
-        query = query.andWhere(`cast(:tag${idx} as text) = ANY(product.tags)`, {
-          [`tag${idx}`]: t,
-        });
-      });
-    }
-
     // Filter by branchId if provided
     if (branchId) {
       query = query
@@ -207,6 +181,132 @@ export class ProductService {
     // Add sale filter
     if (sale) {
       query = query.andWhere('product.price_before_sale IS NOT NULL');
+    }
+
+    this.logger.log('5555555555555550', tag, '4444444444');
+
+    if (tag) {
+      this.logger.log('Raw tag parameter:', tag.toString(), '33333333333');
+      this.logger.log('Raw tag type:', typeof tag);
+      this.logger.log('Raw tag JSON:', JSON.stringify(tag));
+
+      const tagsToFilter: string[] = Array.isArray(tag)
+        ? tag
+        : typeof tag === 'string'
+          ? tag.split('|')
+          : [];
+
+      // Separate color tags from non-color tags
+      const colorTags: string[] = [];
+      const nonColorTags: string[] = [];
+
+      tagsToFilter.forEach((t) => {
+        if (t.startsWith('color:')) {
+          colorTags.push(t);
+        } else {
+          nonColorTags.push(t);
+        }
+      });
+
+      // Process non-color tags as before
+      nonColorTags.forEach((t, idx) => {
+        this.logger.log(`Processing non-color tag: ${t}`);
+        query = query.andWhere(`:tag${idx} = ANY(product.tags)`, {
+          [`tag${idx}`]: t,
+        });
+      });
+
+      // Handle color filtering if color tags exist
+      if (colorTags.length > 0) {
+        this.logger.log('Processing color tags:', colorTags, '666666666');
+
+        // Extract colors from color tags (remove 'color:' prefix)
+        const requestedColors = colorTags.map((colorTag) =>
+          colorTag.replace('color:', '')
+        );
+        console.log('**********************', requestedColors);
+
+        // First get all products that match other criteria to extract their colors
+        const tempProducts = await query.getMany();
+
+        // Extract all colors from products' tags and map products to their colors
+        const allProductColors: string[] = [];
+        const productColorMap = new Map<string, string[]>(); // product_code -> colors
+
+        tempProducts.forEach((product) => {
+          const productColors: string[] = [];
+          if (product.tags) {
+            product.tags.forEach((productTag) => {
+              if (productTag.startsWith('color:')) {
+                const color = productTag.replace('color:', '');
+                productColors.push(color);
+                if (!allProductColors.includes(color)) {
+                  allProductColors.push(color);
+                }
+              }
+            });
+          }
+          productColorMap.set(product.product_code, productColors);
+        });
+
+        console.log(requestedColors, 'allProductColors', allProductColors);
+
+        // Get matching color tags for each requested color and track matching product IDs
+        const allMatchingColorTags: string[] = [];
+        const matchingProductIds: string[] = [];
+
+        requestedColors.forEach((requestedColor) => {
+          const matchingTags = getMatchingColorTags(
+            requestedColor,
+            allProductColors,
+            130 // tolerance
+          );
+
+          if (matchingTags.length > 0) {
+            allMatchingColorTags.push(...matchingTags);
+
+            // Find products that have these matching colors
+            productColorMap.forEach((productColors, productCode) => {
+              const hasMatchingColor = matchingTags.some((colorTag) => {
+                const color = colorTag.replace('color:', '');
+                return productColors.includes(color);
+              });
+
+              if (
+                hasMatchingColor &&
+                !matchingProductIds.includes(productCode)
+              ) {
+                matchingProductIds.push(productCode);
+              }
+            });
+          }
+        });
+
+        console.log(
+          allMatchingColorTags,
+          'allMatchingColorTags',
+          requestedColors,
+          'matchingProductIds:',
+          matchingProductIds
+        );
+
+        // Remove duplicates
+        const uniqueMatchingColorTags = [...new Set(allMatchingColorTags)];
+        this.logger.log('Unique matching color tags:', uniqueMatchingColorTags);
+
+        // Filter products by matching product IDs if we have color matches
+        if (matchingProductIds.length > 0) {
+          query = query.andWhere(
+            'product.product_code IN (:...matchingProductIds)',
+            {
+              matchingProductIds: matchingProductIds,
+            }
+          );
+        } else {
+          // If no matching colors found, return empty result
+          query = query.andWhere('1 = 0'); // This will return no results
+        }
+      }
     }
 
     const total = await query.getCount(); // Calculate offset based on page number
