@@ -410,4 +410,18 @@ export class StoreController implements OnModuleInit {
     this.logger.log(`Branch deleted (ID: ${branchId})`);
     return { message: `Branch with ID ${branchId} deleted successfully` };
   }
+
+  /**
+   * Get store by owner ID
+   *
+   * GET /stores/owner/:ownerId
+   */
+  @Get('owner/:ownerId')
+  async getStoreByOwnerId(@Param('ownerId') ownerId: string): Promise<Store> {
+    const store = await this.storeService.findStoreByOwnerId(ownerId);
+    this.logger.log(
+      `Retrieved store for owner ${ownerId}: ${store.name} (ID: ${store.id})`
+    );
+    return store;
+  }
 }

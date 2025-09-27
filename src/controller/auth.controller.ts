@@ -133,13 +133,44 @@ export class AuthController {
     if (!redirectLink) redirectLink = '';
     if (!redirectSection) redirectSection = '';
 
+    // Update user type based on the section parameter if provided
+    let userType = user.type; // Default to existing type
+    if (
+      redirectSection &&
+      ['owner', 'employee', 'manager', 'sales', 'client'].includes(
+        redirectSection
+      )
+    ) {
+      userType = redirectSection;
+
+      // Update the user type in the database
+      try {
+        await this.userService.updateUser(user.id, {
+          type: redirectSection as
+            | 'owner'
+            | 'client'
+            | 'employee'
+            | 'manager'
+            | 'sales',
+        });
+        this.logger.log(`Updated user ${user.id} type to: ${redirectSection}`);
+      } catch (error) {
+        this.logger.error(
+          `Failed to update user type: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
+        );
+      }
+    }
+
     // Instead of setting cookies, redirect with token and user info in the URL
     const encodedUser = encodeURIComponent(
       JSON.stringify({
         id: user.id,
         name: user.name,
         email: user.email,
-        type: user.type,
+        type: userType, // Use the updated type
+        phone: user.phone, // Include phone field for validation
       })
     );
     const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';

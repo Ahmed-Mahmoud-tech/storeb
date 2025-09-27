@@ -148,6 +148,25 @@ export class StoreService {
     return { ...store, branches, owner };
   }
 
+  async findStoreByOwnerId(
+    ownerId: string
+  ): Promise<Store & { branches?: Branch[] }> {
+    const store = await this.storeRepository.findOne({
+      where: { owner_id: ownerId },
+    });
+    if (!store) {
+      throw new NotFoundException(`Store with owner ID ${ownerId} not found`);
+    }
+
+    // Get branches for this store
+    const branches = await this.branchRepository.find({
+      where: { store_id: store.id },
+    });
+
+    // Return store with branches
+    return { ...store, branches };
+  }
+
   // UPDATE operations for Store
   async updateStore(
     id: string,
