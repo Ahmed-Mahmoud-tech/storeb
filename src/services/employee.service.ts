@@ -34,15 +34,26 @@ export class EmployeeService {
         createEmployeeDto.to_user_id || createEmployeeDto.phone
       }`
     );
+    this.logger.log(`Payload received: ${JSON.stringify(createEmployeeDto)}`);
+
     // Check if phone exists but to_user_id doesn't - check if user exists
     let user: User | undefined;
     if (createEmployeeDto.phone && !createEmployeeDto.to_user_id) {
+      this.logger.log(
+        `Looking for user with phone: ${createEmployeeDto.phone}`
+      );
       // Try to find an existing user with this phone number
       const existingUser = await this.userRepository.findOne({
         where: { phone: createEmployeeDto.phone },
       });
 
       if (existingUser) {
+        this.logger.log(
+          `Found employee user: ID=${existingUser.id}, phone=${existingUser.phone}, name=${existingUser.name}, current type=${existingUser.type}`
+        );
+        this.logger.log(
+          `Owner (from_user_id) is: ${createEmployeeDto.from_user_id}`
+        );
         // Use existing user if found
         createEmployeeDto.to_user_id = existingUser.id;
         user = existingUser;
@@ -57,12 +68,31 @@ export class EmployeeService {
       user = await this.userRepository.findOne({
         where: { id: createEmployeeDto.to_user_id },
       });
+      if (user) {
+        this.logger.log(
+          `Found user by to_user_id: ID=${user.id}, phone=${user.phone}, name=${user.name}, current type=${user.type}`
+        );
+      }
     }
 
     // If user found and role is provided in DTO, update user type with DTO role
     if (user && createEmployeeDto.role) {
+      this.logger.log(
+        `UPDATING USER TYPE: User ID=${user.id}, phone=${user.phone}, name=${user.name}`
+      );
+      this.logger.log(
+        `Changing type from "${user.type}" to "${createEmployeeDto.role}"`
+      );
+      this.logger.log(
+        `This should be the EMPLOYEE (phone owner), NOT the owner (from_user_id: ${createEmployeeDto.from_user_id})`
+      );
+
       user.type = createEmployeeDto.role;
       await this.userRepository.save(user);
+
+      this.logger.log(
+        `Successfully updated user type to "${user.type}" for user ID: ${user.id}`
+      );
     }
 
     // Extract branches array from DTO before creating employee
