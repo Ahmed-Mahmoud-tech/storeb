@@ -22,11 +22,14 @@ export class AuthHelper {
 
       // Decode the payload (second part of the JWT)
       const payload = Buffer.from(tokenParts[1], 'base64').toString('utf-8');
-      const parsedPayload = JSON.parse(payload);
+      const parsedPayload = JSON.parse(payload) as Record<string, any>;
       console.log(parsedPayload, 'parsedPayload');
 
-      // Return the user ID from the payload
-      return parsedPayload || undefined;
+      // Return the user ID from the payload (now using 'sub' instead of 'userId')
+      if (parsedPayload?.sub) {
+        return { userId: parsedPayload.sub as string };
+      }
+      return undefined;
     } catch (error) {
       console.error('Error extracting user ID from token:', error);
       return undefined;

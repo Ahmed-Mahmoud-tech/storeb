@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   Req,
   UseGuards,
   HttpStatus,
@@ -10,10 +12,18 @@ import {
 } from '@nestjs/common';
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
+import { StoreService } from '../services/store.service';
 import { Response, Request as ExpressRequest } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GoogleAuthGuard } from '../auth/google-auth.guard';
+import {
+  RegisterWithEmailDto,
+  LoginWithEmailDto,
+  VerifyEmailDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from '../dto/user.dto';
 
 // Extended request interface to include user from Passport and cookies
 interface RequestWithUser extends ExpressRequest {
@@ -31,7 +41,8 @@ export class AuthController {
 
   constructor(
     private readonly userService: UserService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly storeService: StoreService
   ) {}
 
   @Get('google')
@@ -60,7 +71,6 @@ export class AuthController {
   ): Promise<void> {
     // Handles the Google OAuth callback
     const { email, name } = req.user;
-    // const { email, name, accessToken } = req.user;
 
     if (!email) {
       throw new HttpException(
@@ -94,7 +104,7 @@ export class AuthController {
     // Generate JWT token
     const token = this.jwtService.sign(
       {
-        userId: user.id,
+        sub: user.id,
         email: user.email,
         type: user.type,
       },
@@ -213,5 +223,181 @@ export class AuthController {
     return res
       .status(HttpStatus.OK)
       .json({ message: 'Logged out successfully' });
+  }
+
+  // Email/Password Authentication Endpoints
+
+  @Post('register')
+  async registerWithEmail(@Body() registerDto: RegisterWithEmailDto) {
+    try {
+      const user = await this.userService.registerWithEmail(registerDto);
+      this.logger.log(`User registered successfully: ${user.email}`);
+
+      return {
+        message:
+          'User registered successfully. Please check your email for verification.',
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          type: user.type,
+          email_verified: user.email_verified,
+        },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error('Registration failed:', errorMessage);
+      throw error;
+    }
+  }
+
+  @Post('login')
+  async loginWithEmail(@Body() loginDto: LoginWithEmailDto) {
+    try {
+      const user = await this.userService.loginWithEmail(loginDto);
+
+      // Check if user is an owner and whether they have a store
+      let hasStore = false;
+      let storeData = null;
+      if (user.type === 'owner') {
+        try {
+          hasStore = await this.storeService.checkOwnerHasStore(user.id);
+          this.logger.log(`Owner ${user.email} hasStore: ${hasStore}`);
+
+          // If owner has a store, get the store data
+          if (hasStore) {
+            try {
+              storeData = await this.storeService.findStoreByOwnerId(user.id);
+              this.logger.log(
+                `Store data for owner ${user.email}:`,
+                storeData?.name || 'unknown'
+              );
+            } catch (error) {
+              this.logger.error('Error fetching store data:', error);
+              hasStore = false;
+              storeData = null;
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error checking store for owner ${user.email}:`,
+            error
+          );
+          hasStore = false;
+          storeData = null;
+        }
+      }
+
+      // Generate JWT token
+      const token = this.jwtService.sign(
+        {
+          sub: user.id,
+          email: user.email,
+          type: user.type,
+        },
+        {
+          expiresIn: '7d', // Token expires in 7 days
+        }
+      );
+
+      this.logger.log(`User logged in successfully: ${user.email}`);
+
+      const responseData = {
+        message: 'Login successful',
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          type: user.type,
+          phone: user.phone,
+          email_verified: user.email_verified,
+          hasStore: user.type === 'owner' ? hasStore : undefined,
+          store:
+            user.type === 'owner' && storeData
+              ? {
+                  id: (storeData as any).id,
+                  name: (storeData as any).name,
+                  // Format store name for URL (replace spaces with underscores)
+                  urlName: (storeData as any).name?.split(' ').join('_'),
+                }
+              : undefined,
+        },
+      };
+
+      this.logger.log(
+        `Login response for ${user.email}:`,
+        JSON.stringify(responseData.user)
+      );
+
+      return responseData;
+    } catch (error) {
+      this.logger.error('Login failed:', error);
+      throw error;
+    }
+  }
+
+  @Post('verify-email')
+  async verifyEmail(@Body() verifyDto: VerifyEmailDto) {
+    try {
+      const result = await this.userService.verifyEmail(verifyDto.token);
+      this.logger.log(`Email verified for user: ${result.user.email}`);
+
+      return {
+        message: result.message,
+        user: {
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
+          type: result.user.type,
+          email_verified: result.user.email_verified,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Email verification failed:', error);
+      throw error;
+    }
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() forgotDto: ForgotPasswordDto) {
+    try {
+      const result = await this.userService.forgotPassword(forgotDto.email);
+      this.logger.log(
+        `Forgot password request processed for: ${forgotDto.email}`
+      );
+      return result;
+    } catch (error) {
+      this.logger.error('Forgot password failed:', error);
+      throw error;
+    }
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() resetDto: ResetPasswordDto) {
+    try {
+      const result = await this.userService.resetPassword(
+        resetDto.token,
+        resetDto.newPassword
+      );
+      this.logger.log('Password reset successfully');
+      return result;
+    } catch (error) {
+      this.logger.error('Password reset failed:', error);
+      throw error;
+    }
+  }
+
+  @Post('resend-verification')
+  async resendVerificationEmail(@Body() body: { email: string }) {
+    try {
+      const result = await this.userService.resendVerificationEmail(body.email);
+      this.logger.log(`Verification email resent to: ${body.email}`);
+      return result;
+    } catch (error) {
+      this.logger.error('Resend verification failed:', error);
+      throw error;
+    }
   }
 }

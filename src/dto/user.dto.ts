@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsEmail, IsEnum, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEmail,
+  IsEnum,
+  IsUUID,
+  MinLength,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateUserDto {
   @IsOptional()
@@ -17,6 +25,19 @@ export class CreateUserDto {
 
   @IsEmail()
   email!: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  password?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  email_verified?: boolean;
+
+  @IsOptional()
+  @IsString()
+  verification_token?: string;
 
   @IsOptional()
   @IsUUID()
@@ -41,6 +62,65 @@ export class UpdateUserDto {
   email?: string;
 
   @IsOptional()
+  @IsString()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  password?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  email_verified?: boolean;
+
+  @IsOptional()
+  @IsString()
+  verification_token?: string;
+
+  @IsOptional()
   @IsUUID()
   updated_by?: string; // UUID of the user updating this record
+}
+
+export class RegisterWithEmailDto {
+  @IsString()
+  name!: string;
+
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  @MinLength(6, { message: 'Password must be at least 6 characters long' })
+  password!: string;
+
+  @IsEnum(['owner', 'employee', 'manager', 'client', 'sales'])
+  type!: 'owner' | 'employee' | 'manager' | 'client' | 'sales';
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+}
+
+export class LoginWithEmailDto {
+  @IsEmail()
+  email!: string;
+
+  @IsString()
+  password!: string;
+}
+
+export class VerifyEmailDto {
+  @IsString()
+  token!: string;
+}
+
+export class ForgotPasswordDto {
+  @IsEmail()
+  email!: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  token!: string;
+
+  @IsString()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  newPassword!: string;
 }

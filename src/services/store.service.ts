@@ -6,7 +6,6 @@ import { Branch } from '../model/branches.model';
 import { CreateStoreDto } from '../dto/store.dto';
 import { CreateBranchDto } from '../dto/branch.dto';
 import { FileUploadService } from './file-upload.service';
-// import { create } from 'domain';
 
 @Injectable()
 export class StoreService {
@@ -19,9 +18,7 @@ export class StoreService {
     private branchRepository: Repository<Branch>,
     private fileUploadService: FileUploadService
   ) {}
-  // createStore(createStoreDto: CreateStoreDto): void {
-  //   console.log(createStoreDto, 'createStoreDto');
-  // }
+
   async createStore(createStoreDto: CreateStoreDto): Promise<Store> {
     this.logger.log(`Creating store: ${createStoreDto.storeName}`);
     const {
@@ -38,8 +35,7 @@ export class StoreService {
     const store = new Store();
     store.name = storeName;
 
-    console.log('Store Service - Received logo:', logo);
-    console.log('Store Service - Received banner:', banner); // Store logo and banner as URLs
+    // Store logo and banner as URLs
     store.logo = logo || null;
     store.banner = banner || null;
     store.theme_color = themeColor;
@@ -165,6 +161,13 @@ export class StoreService {
 
     // Return store with branches
     return { ...store, branches };
+  }
+
+  async checkOwnerHasStore(ownerId: string): Promise<boolean> {
+    const store = await this.storeRepository.findOne({
+      where: { owner_id: ownerId },
+    });
+    return !!store;
   }
 
   // UPDATE operations for Store

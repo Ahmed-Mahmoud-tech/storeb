@@ -417,11 +417,23 @@ export class StoreController implements OnModuleInit {
    * GET /stores/owner/:ownerId
    */
   @Get('owner/:ownerId')
-  async getStoreByOwnerId(@Param('ownerId') ownerId: string): Promise<Store> {
-    const store = await this.storeService.findStoreByOwnerId(ownerId);
-    this.logger.log(
-      `Retrieved store for owner ${ownerId}: ${store.name} (ID: ${store.id})`
-    );
-    return store;
+  async getStoreByOwnerId(
+    @Param('ownerId') ownerId: string
+  ): Promise<Store | null> {
+    try {
+      const store = await this.storeService.findStoreByOwnerId(ownerId);
+      this.logger.log(
+        `Retrieved store for owner ${ownerId}: ${store.name} (ID: ${store.id})`
+      );
+      return store;
+    } catch (error) {
+      if (error.status === 404) {
+        // Owner doesn't have a store yet, return null instead of throwing error
+        this.logger.log(`No store found for owner ${ownerId}`);
+        return null;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 }

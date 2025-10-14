@@ -19,6 +19,7 @@ import { Rating } from './model/rating.model';
 import { Employee } from './model/employees.model';
 import { EmployeeBranch } from './model/employee_branches.model';
 import { FileUploadService } from './services/file-upload.service';
+import { EmailService } from './services/email.service';
 import { StoreController } from './controller/store.controller';
 import { UserController } from './controller/user.controller';
 import { StoreService } from './services/store.service';
@@ -176,6 +177,7 @@ import 'winston-daily-rotate-file';
     StoreService,
     ProductService,
     FileUploadService,
+    EmailService,
     RatingService,
     EmployeeService,
     CustomerProductService,
