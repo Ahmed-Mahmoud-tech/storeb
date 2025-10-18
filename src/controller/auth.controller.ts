@@ -47,9 +47,42 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
-  googleLogin(): void {
+  googleLogin(@Req() req: ExpressRequest, @Res() res: Response): void {
     // Initiates Google OAuth login
     this.logger.log('Google login initiated');
+
+    // Extract userType and other parameters from query
+    const { userType, redirectLink } = req.query;
+
+    this.logger.log('Google login params:', { userType, redirectLink });
+
+    // Build state parameter for OAuth
+    const stateParams = new URLSearchParams();
+    if (userType && typeof userType === 'string') {
+      stateParams.set('section', userType);
+    }
+    if (redirectLink && typeof redirectLink === 'string') {
+      stateParams.set('redirectLink', redirectLink);
+    }
+
+    const state = stateParams.toString();
+    this.logger.log('Built OAuth state:', state);
+
+    // If we have parameters to pass, redirect to Google with state
+    if (state) {
+      const googleAuthUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+        `redirect_uri=${encodeURIComponent(
+          process.env.GOOGLE_CALLBACK_URL || ''
+        )}&` +
+        `response_type=code&` +
+        `scope=email profile&` +
+        `state=${encodeURIComponent(state)}`;
+
+      this.logger.log('Redirecting to Google with state:', googleAuthUrl);
+      return res.redirect(googleAuthUrl);
+    }
   }
   @Get('profile')
   @UseGuards(JwtAuthGuard)
@@ -259,7 +292,8 @@ export class AuthController {
 
       // Check if user is an owner and whether they have a store
       let hasStore = false;
-      let storeData = null;
+      let storeData: { id: string; name: string; [key: string]: any } | null =
+        null;
       if (user.type === 'owner') {
         try {
           hasStore = await this.storeService.checkOwnerHasStore(user.id);
@@ -268,7 +302,8 @@ export class AuthController {
           // If owner has a store, get the store data
           if (hasStore) {
             try {
-              storeData = await this.storeService.findStoreByOwnerId(user.id);
+              const store = await this.storeService.findStoreByOwnerId(user.id);
+              storeData = store;
               this.logger.log(
                 `Store data for owner ${user.email}:`,
                 storeData?.name || 'unknown'
@@ -317,10 +352,10 @@ export class AuthController {
           store:
             user.type === 'owner' && storeData
               ? {
-                  id: (storeData as any).id,
-                  name: (storeData as any).name,
+                  id: storeData.id,
+                  name: storeData.name,
                   // Format store name for URL (replace spaces with underscores)
-                  urlName: (storeData as any).name?.split(' ').join('_'),
+                  urlName: storeData.name?.split(' ').join('_'),
                 }
               : undefined,
         },
