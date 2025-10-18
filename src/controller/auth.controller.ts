@@ -13,6 +13,8 @@ import {
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
 import { StoreService } from '../services/store.service';
+import { Store } from '../model/store.model';
+import { Branch } from '../model/branches.model';
 import { Response, Request as ExpressRequest } from 'express';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -79,16 +81,57 @@ export class AuthController {
       );
     }
 
+    // Parse redirect info from OAuth state param ONLY
+    let redirectLink = '';
+    let redirectSection = '';
+    let userTypeFromState = '';
+
+    if (req.query.state) {
+      try {
+        const state = decodeURIComponent(req.query.state as string);
+        const params = new URLSearchParams(state);
+        if (params.get('redirectLink')) {
+          redirectLink = params.get('redirectLink')!;
+        }
+        if (params.get('section')) {
+          redirectSection = params.get('section')!;
+        }
+        if (params.get('userType')) {
+          userTypeFromState = params.get('userType')!;
+        }
+        this.logger.log('Parsed from state:', {
+          redirectLink,
+          redirectSection,
+          userTypeFromState,
+        });
+      } catch (err) {
+        this.logger.error('Error parsing state param:', err);
+      }
+    }
+
     // Check if user exists in our database
     let user = await this.userService.findUserByEmail(email);
 
-    // If user doesn't exist, create a new one
+    // If user doesn't exist and this is a login attempt, redirect with error
+    if (!user && redirectSection === 'login') {
+      const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';
+      const errorRedirectUrl = `${baseUrl}?error=account_not_found`;
+      this.logger.log(`Login attempt for non-existent user: ${email}`);
+      return res.redirect(errorRedirectUrl);
+    }
+
+    // If user doesn't exist and this is registration, create a new one
     if (!user) {
       try {
         user = await this.userService.createUser({
           name,
           email,
-          type: 'client', // Default role, you might want to customize this
+          type: (userTypeFromState || 'client') as
+            | 'owner'
+            | 'client'
+            | 'employee'
+            | 'manager'
+            | 'sales', // Use userType from state, default to 'client'
         });
         this.logger.log(`New user created: ${email}`);
       } catch {
@@ -109,35 +152,12 @@ export class AuthController {
         type: user.type,
       },
       {
-        expiresIn: '7d', // Token expires in 7 days
+        expiresIn: '30d', // Token expires in 30 days
       }
     );
 
     // Debug the cookie headers
     this.logger.log(`Cookie headers: ${req.headers.cookie}`);
-
-    // Parse redirect info from OAuth state param ONLY
-    let redirectLink = '';
-    let redirectSection = '';
-
-    if (req.query.state) {
-      try {
-        const state = decodeURIComponent(req.query.state as string);
-        const params = new URLSearchParams(state);
-        if (params.get('redirectLink')) {
-          redirectLink = params.get('redirectLink')!;
-        }
-        if (params.get('section')) {
-          redirectSection = params.get('section')!;
-        }
-        this.logger.log('Parsed from state:', {
-          redirectLink,
-          redirectSection,
-        });
-      } catch (err) {
-        this.logger.error('Error parsing state param:', err);
-      }
-    }
 
     // Provide sensible defaults if state is missing or empty
     if (!redirectLink) redirectLink = '';
@@ -259,7 +279,7 @@ export class AuthController {
 
       // Check if user is an owner and whether they have a store
       let hasStore = false;
-      let storeData = null;
+      let storeData: (Store & { branches?: Branch[] }) | null = null;
       if (user.type === 'owner') {
         try {
           hasStore = await this.storeService.checkOwnerHasStore(user.id);
@@ -317,10 +337,10 @@ export class AuthController {
           store:
             user.type === 'owner' && storeData
               ? {
-                  id: (storeData as any).id,
-                  name: (storeData as any).name,
+                  id: storeData.id,
+                  name: storeData.name,
                   // Format store name for URL (replace spaces with underscores)
-                  urlName: (storeData as any).name?.split(' ').join('_'),
+                  urlName: storeData.name?.split(' ').join('_'),
                 }
               : undefined,
         },
