@@ -280,8 +280,8 @@ export class StoreController implements OnModuleInit {
           await this.fileUploadService.validateAndProcessUpload(
             files.banner[0],
             {
-              width: 1200,
-              height: 400,
+              width: 2000,
+              height: 2000,
               quality: 80,
               format: 'webp',
             }
