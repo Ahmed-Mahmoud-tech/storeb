@@ -259,7 +259,7 @@ export class ProductService {
           const matchingTags = getMatchingColorTags(
             requestedColor,
             allProductColors,
-            130 // tolerance
+            70 // tolerance
           );
 
           if (matchingTags.length > 0) {
