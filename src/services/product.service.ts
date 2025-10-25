@@ -115,7 +115,9 @@ export class ProductService {
     userId?: string
   ): Promise<{ products: any[]; total: number; page: number; limit: number }> {
     this.logger.log('Fetching all products');
-    let query = this.productRepository.createQueryBuilder('product');
+    let query = this.productRepository
+      .createQueryBuilder('product')
+      .distinct(true); // Add DISTINCT to avoid counting duplicates from JOINs
 
     if (status) {
       if (Array.isArray(status)) {
