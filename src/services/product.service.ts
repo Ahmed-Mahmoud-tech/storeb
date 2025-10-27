@@ -133,9 +133,15 @@ export class ProductService {
       }
     }
     if (category) {
-      query = query.andWhere('product.category SIMILAR TO :category', {
-        category: `%${category}%`,
-      });
+      // Use exact match or prefix match for category filtering
+      // This ensures 'men.tops' doesn't match 'women.tops'
+      query = query.andWhere(
+        '(product.category = :category OR product.category LIKE :categoryPrefix)',
+        {
+          category: category,
+          categoryPrefix: `${category}.%`,
+        }
+      );
     }
     // Filter by branchId if provided
     if (branchId) {
