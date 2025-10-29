@@ -112,13 +112,15 @@ export class FavoriteService {
       where: { user_id },
     });
 
-    // Extract product IDs from favorites
-    const productIds = favorites.map((favorite) => favorite.product);
-
-    // Fetch full product details for each favorited product
+    // Fetch full product details for each favorited product with favorite ID
     const products = await Promise.all(
-      productIds.map(async (productId) => {
-        return await this.productService.findOne(productId);
+      favorites.map(async (favorite) => {
+        const product = await this.productService.findOne(favorite.product);
+        // Add the favorite ID to the product data
+        return {
+          ...product,
+          isFavorite: favorite.id,
+        };
       })
     );
 

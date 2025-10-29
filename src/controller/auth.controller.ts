@@ -13,6 +13,7 @@ import {
 import { AuthGuard as PassportAuthGuard } from '@nestjs/passport';
 import { UserService } from '../services/user.service';
 import { StoreService } from '../services/store.service';
+import { EmployeeService } from '../services/employee.service';
 import { Store } from '../model/store.model';
 import { Branch } from '../model/branches.model';
 import { Response, Request as ExpressRequest } from 'express';
@@ -44,7 +45,8 @@ export class AuthController {
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
-    private readonly storeService: StoreService
+    private readonly storeService: StoreService,
+    private readonly employeeService: EmployeeService
   ) {}
 
   @Get('google')
@@ -194,6 +196,63 @@ export class AuthController {
     }
 
     // Instead of setting cookies, redirect with token and user info in the URL
+    // Fetch store name based on user type
+    let storeName: string | undefined;
+
+    if (userType === 'owner') {
+      // For owners, fetch their store directly
+      try {
+        const store = await this.storeService.findStoreByOwnerId(user.id);
+        if (store) {
+          storeName = store.name;
+          this.logger.log(
+            `Found store "${storeName}" for owner user: ${user.email}`
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error fetching store for owner ${user.email}:`,
+          error
+        );
+      }
+    } else if (userType === 'manager' || userType === 'sales') {
+      // For managers and sales, fetch their store name from employment relationship
+      try {
+        // Find active employment relationship for this user
+        const employees = await this.employeeService.findEmployeesByToUserId(
+          user.id
+        );
+        if (employees && employees.length > 0) {
+          // Find an active employment
+          const activeEmployee = employees.find(
+            (emp) => emp.status === 'activate'
+          );
+          if (activeEmployee) {
+            // Get the employer (owner) to find their store
+            const employer = await this.userService.getUserById(
+              activeEmployee.from_user_id
+            );
+            if (employer && employer.type === 'owner') {
+              const store = await this.storeService.findStoreByOwnerId(
+                employer.id
+              );
+              if (store) {
+                storeName = store.name;
+                this.logger.log(
+                  `Found store "${storeName}" for ${userType} user: ${user.email}`
+                );
+              }
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error fetching store for ${userType} user ${user.email}:`,
+          error
+        );
+      }
+    }
+
     const encodedUser = encodeURIComponent(
       JSON.stringify({
         id: user.id,
@@ -201,6 +260,7 @@ export class AuthController {
         email: user.email,
         type: userType, // Use the updated type
         phone: user.phone, // Include phone field for validation
+        storeName: storeName, // Include storeName for managers and sales
       })
     );
     const baseUrl = process.env.CLIENT_BASE_URL || 'http://localhost:3000';
@@ -280,6 +340,8 @@ export class AuthController {
       // Check if user is an owner and whether they have a store
       let hasStore = false;
       let storeData: (Store & { branches?: Branch[] }) | null = null;
+      let storeName: string | undefined;
+
       if (user.type === 'owner') {
         try {
           hasStore = await this.storeService.checkOwnerHasStore(user.id);
@@ -289,6 +351,7 @@ export class AuthController {
           if (hasStore) {
             try {
               storeData = await this.storeService.findStoreByOwnerId(user.id);
+              storeName = storeData?.name;
               this.logger.log(
                 `Store data for owner ${user.email}:`,
                 storeData?.name || 'unknown'
@@ -306,6 +369,39 @@ export class AuthController {
           );
           hasStore = false;
           storeData = null;
+        }
+      } else if (user.type === 'manager' || user.type === 'sales') {
+        // For managers and sales, fetch their store name from employment relationship
+        try {
+          const employees = await this.employeeService.findEmployeesByToUserId(
+            user.id
+          );
+          if (employees && employees.length > 0) {
+            const activeEmployee = employees.find(
+              (emp) => emp.status === 'activate'
+            );
+            if (activeEmployee) {
+              const employer = await this.userService.getUserById(
+                activeEmployee.from_user_id
+              );
+              if (employer && employer.type === 'owner') {
+                const store = await this.storeService.findStoreByOwnerId(
+                  employer.id
+                );
+                if (store) {
+                  storeName = store.name;
+                  this.logger.log(
+                    `Found store "${storeName}" for ${user.type} user: ${user.email}`
+                  );
+                }
+              }
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error fetching store for ${user.type} user ${user.email}:`,
+            error
+          );
         }
       }
 
@@ -333,6 +429,7 @@ export class AuthController {
           type: user.type,
           phone: user.phone,
           email_verified: user.email_verified,
+          storeName: storeName, // Include storeName for all user types
           hasStore: user.type === 'owner' ? hasStore : undefined,
           store:
             user.type === 'owner' && storeData
