@@ -60,9 +60,22 @@ export class EmployeeController {
   }
 
   /**
+   * Get branches assigned to a user (by to_user_id)
+   *
+   * GET /employees/user/:userId/branches
+   */
+  @Get('user/:userId/branches')
+  async getUserBranches(
+    @Param('userId') userId: string
+  ): Promise<{ branchIds: string[] }> {
+    const branchIds = await this.employeeService.findBranchesByUserId(userId);
+    return { branchIds };
+  }
+
+  /**
    * Get employee relationships by employer (from_user_id)
    *
-   * GET /employees/employer/:fromUserId
+   * GET /employees/employer/with-branch-names-and-user
    */
   @Get('employer/with-branch-names-and-user')
   async getEmployeesWithBranchNamesAndUserByEmployer(

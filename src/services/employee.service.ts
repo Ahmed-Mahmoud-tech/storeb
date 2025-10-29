@@ -224,6 +224,32 @@ export class EmployeeService {
   }
 
   /**
+   * Find branches assigned to a user by their user ID (to_user_id)
+   * @param userId - User ID (to_user_id)
+   */
+  async findBranchesByUserId(userId: string): Promise<string[]> {
+    // First find the employee records where this user is the employee (to_user_id)
+    const employees = await this.employeeRepository.find({
+      where: { to_user_id: userId },
+    });
+
+    // If no employee records found, return empty array
+    if (!employees || employees.length === 0) {
+      return [];
+    }
+
+    // Get all branch IDs for all employee records of this user
+    const allBranchIds: string[] = [];
+    for (const employee of employees) {
+      const branchIds = await this.findEmployeeBranches(employee.id);
+      allBranchIds.push(...branchIds);
+    }
+
+    // Return unique branch IDs
+    return [...new Set(allBranchIds)];
+  }
+
+  /**
    * Find an employee by ID, including their branch assignments
    * @param id - Employee ID
    */
