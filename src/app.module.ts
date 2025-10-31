@@ -75,7 +75,11 @@ import 'winston-daily-rotate-file';
           logging: false, // Disable SQL logging completely
           maxQueryExecutionTime: 1000, // Log only slow queries (above 1000ms)
           uuidExtension: 'pgcrypto', // Use PostgreSQL 13+ native UUID
-          ssl: isProduction, // Enable SSL in production
+          ssl: isProduction
+            ? {
+                rejectUnauthorized: false, // Accept self-signed certificates
+              }
+            : false,
           extra: {
             connectionLimit: 10, // Connection pool size
             application_name: 'nest_app',
