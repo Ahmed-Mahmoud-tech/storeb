@@ -23,7 +23,7 @@ const prodConfig = process.env.DATABASE_PUBLIC_URL
 async function transferDatabase() {
   const localClient = new Client(localConfig);
   const prodClient = new Client(prodConfig);
-  
+
   const transferStats = {
     totalTables: 0,
     successfulTables: [],
@@ -64,7 +64,7 @@ async function transferDatabase() {
 
     // Disable foreign key checks on production
     await prodClient.query('SET session_replication_role = replica;');
-    
+
     // Start a transaction
     await prodClient.query('BEGIN;');
 
@@ -82,7 +82,9 @@ async function transferDatabase() {
         console.log(`📦 ${tablename}...`);
 
         // Get data from local
-        const localData = await localClient.query(`SELECT * FROM "${tablename}";`);
+        const localData = await localClient.query(
+          `SELECT * FROM "${tablename}";`
+        );
         const localRowCount = localData.rows.length;
         console.log(`   Found ${localRowCount} rows in local`);
 
@@ -95,7 +97,9 @@ async function transferDatabase() {
           for (let i = 0; i < localData.rows.length; i++) {
             const row = localData.rows[i];
             const values = columns.map((col) => row[col]);
-            const placeholders = values.map((_, idx) => `$${idx + 1}`).join(', ');
+            const placeholders = values
+              .map((_, idx) => `$${idx + 1}`)
+              .join(', ');
 
             await prodClient.query(
               `INSERT INTO "${tablename}" (${columnNames}) VALUES (${placeholders})`,
@@ -107,11 +111,13 @@ async function transferDatabase() {
         }
 
         // Verify the transfer within the transaction
-        const prodData = await prodClient.query(`SELECT COUNT(*) FROM "${tablename}";`);
+        const prodData = await prodClient.query(
+          `SELECT COUNT(*) FROM "${tablename}";`
+        );
         const prodRowCount = parseInt(prodData.rows[0].count);
-        
+
         console.log(`   📊 In-transaction count: ${prodRowCount} rows`);
-        
+
         if (localRowCount === prodRowCount) {
           console.log(`   ✓ Verification passed (in transaction)`);
           transferStats.successfulTables.push(tablename);
@@ -122,7 +128,9 @@ async function transferDatabase() {
             prodRows: prodRowCount,
           });
         } else {
-          console.log(`   ⚠️  Verification failed: Expected ${localRowCount} rows, found ${prodRowCount}`);
+          console.log(
+            `   ⚠️  Verification failed: Expected ${localRowCount} rows, found ${prodRowCount}`
+          );
           transferStats.failedTables.push(tablename);
           transferStats.verificationResults.push({
             table: tablename,
@@ -132,7 +140,9 @@ async function transferDatabase() {
           });
         }
       } catch (error) {
-        console.error(`   ❌ Error transferring ${tablename}: ${error.message}`);
+        console.error(
+          `   ❌ Error transferring ${tablename}: ${error.message}`
+        );
         transferStats.failedTables.push(tablename);
         transferStats.verificationResults.push({
           table: tablename,
@@ -145,14 +155,16 @@ async function transferDatabase() {
     // Commit the transaction
     await prodClient.query('COMMIT;');
     console.log('\n✓ Transaction committed\n');
-    
+
     // Re-enable foreign key checks
     await prodClient.query('SET session_replication_role = DEFAULT;');
-    
+
     // Verify data persists after commit
     console.log('🔍 Verifying data persistence after commit...');
     for (const tablename of tables) {
-      const result = await prodClient.query(`SELECT COUNT(*) FROM "${tablename}";`);
+      const result = await prodClient.query(
+        `SELECT COUNT(*) FROM "${tablename}";`
+      );
       const count = parseInt(result.rows[0].count);
       console.log(`   ${tablename.padEnd(30)} ${count} rows`);
     }
@@ -200,8 +212,8 @@ async function transferDatabase() {
     if (transferStats.successfulTables.length > 0) {
       console.log('\n✅ Successfully transferred tables:');
       transferStats.verificationResults
-        .filter(r => r.status === 'SUCCESS')
-        .forEach(r => {
+        .filter((r) => r.status === 'SUCCESS')
+        .forEach((r) => {
           console.log(`   ✓ ${r.table}: ${r.localRows} rows`);
         });
     }
@@ -209,10 +221,12 @@ async function transferDatabase() {
     if (transferStats.failedTables.length > 0) {
       console.log('\n❌ Failed or mismatched tables:');
       transferStats.verificationResults
-        .filter(r => r.status !== 'SUCCESS')
-        .forEach(r => {
+        .filter((r) => r.status !== 'SUCCESS')
+        .forEach((r) => {
           if (r.status === 'MISMATCH') {
-            console.log(`   ✗ ${r.table}: Expected ${r.localRows} rows, found ${r.prodRows} rows`);
+            console.log(
+              `   ✗ ${r.table}: Expected ${r.localRows} rows, found ${r.prodRows} rows`
+            );
           } else {
             console.log(`   ✗ ${r.table}: ${r.error}`);
           }
