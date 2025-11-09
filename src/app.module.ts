@@ -35,6 +35,10 @@ import { CustomerProductController } from './controller/customer_product.control
 import { Favorite } from './model/favorite.model';
 import { FavoriteService } from './services/favorite.service';
 import { FavoriteController } from './controller/favorite.controller';
+import { UserAction } from './model/user-actions.model';
+import { UserActionService } from './services/user-action.service';
+import { UserActionController } from './controller/user-action.controller';
+import { TestTrackingController } from './controller/test-tracking.controller';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
@@ -70,6 +74,7 @@ import 'winston-daily-rotate-file';
             EmployeeBranch,
             CustomerProduct,
             Favorite,
+            UserAction,
           ],
           synchronize: !isProduction, // Auto-create tables only in development
           logging: false, // Disable SQL logging completely
@@ -110,6 +115,7 @@ import 'winston-daily-rotate-file';
       EmployeeBranch,
       CustomerProduct,
       Favorite,
+      UserAction,
     ]),
     PassportModule.register({ defaultStrategy: 'google' }),
     JwtModule.register({
@@ -173,6 +179,8 @@ import 'winston-daily-rotate-file';
     EmployeeController,
     CustomerProductController,
     FavoriteController,
+    UserActionController,
+    TestTrackingController,
   ],
   providers: [
     AppService,
@@ -187,6 +195,7 @@ import 'winston-daily-rotate-file';
     EmployeeService,
     CustomerProductService,
     FavoriteService,
+    UserActionService,
   ],
 })
 export class AppModule {}
