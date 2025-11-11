@@ -7,6 +7,10 @@ export class CreateUserActionDto {
 
   @IsOptional()
   @IsString()
+  user_id?: string;
+
+  @IsOptional()
+  @IsString()
   store_id?: string;
 
   @IsOptional()
@@ -46,4 +50,8 @@ export class GetUserActionsQueryDto {
   @IsOptional()
   @IsString()
   offset?: string;
+
+  @IsOptional()
+  @IsString()
+  page?: string;
 }

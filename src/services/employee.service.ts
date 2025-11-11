@@ -466,4 +466,45 @@ export class EmployeeService {
       throw new NotFoundException(`Employee with ID ${id} not found`);
     }
   }
+
+  /**
+   * Check if a user is staff (manager, sales person) of a specific store
+   * @param userId - The user ID to check
+   * @param storeId - The store ID to check against
+   * @returns true if user is staff of the store, false otherwise
+   */
+  async isUserStaffOfStore(userId: string, storeId: string): Promise<boolean> {
+    if (!userId || !storeId) {
+      return false;
+    }
+
+    try {
+      // Check if user has an employee record
+      const employee = await this.employeeRepository.findOne({
+        where: { to_user_id: userId },
+      });
+
+      if (!employee) {
+        return false;
+      }
+
+      // Check if this employee has access to any branch of this store
+      // by querying employee_branches and checking if any belong to this store
+      const branchesInStore = await this.branchRepository
+        .createQueryBuilder('branch')
+        .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
+        .where('branch.store_id = :storeId', { storeId })
+        .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
+        .getCount();
+
+      return branchesInStore > 0;
+    } catch (error) {
+      this.logger.warn(
+        `Error checking if user ${userId} is staff of store ${storeId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      );
+      return false;
+    }
+  }
 }

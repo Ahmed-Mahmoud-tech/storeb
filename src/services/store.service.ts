@@ -6,6 +6,8 @@ import { Branch } from '../model/branches.model';
 import { CreateStoreDto } from '../dto/store.dto';
 import { CreateBranchDto } from '../dto/branch.dto';
 import { FileUploadService } from './file-upload.service';
+import { UserActionService } from './user-action.service';
+import { ActionType } from '../model/user-actions.model';
 
 @Injectable()
 export class StoreService {
@@ -16,7 +18,8 @@ export class StoreService {
     private storeRepository: Repository<Store>,
     @InjectRepository(Branch)
     private branchRepository: Repository<Branch>,
-    private fileUploadService: FileUploadService
+    private fileUploadService: FileUploadService,
+    private userActionService: UserActionService
   ) {}
 
   async createStore(createStoreDto: CreateStoreDto): Promise<Store> {
@@ -122,7 +125,19 @@ export class StoreService {
   async findStoreByName(
     name: string
   ): Promise<Store & { branches?: Branch[]; owner?: any }> {
-    const store = await this.storeRepository.findOne({ where: { name } });
+    let store = await this.storeRepository.findOne({ where: { name } });
+
+    // If not found, try replacing underscores with spaces (for URL-safe names)
+    if (!store && name.includes('_')) {
+      const nameWithSpaces = name.replace(/_/g, ' ');
+      store = await this.storeRepository.findOne({
+        where: { name: nameWithSpaces },
+      });
+      this.logger.log(
+        `Store lookup: tried with spaces: ${nameWithSpaces}, found: ${!!store}`
+      );
+    }
+
     if (!store) {
       throw new NotFoundException(`Store with name ${name} not found`);
     }
@@ -389,6 +404,110 @@ export class StoreService {
       if (!processedBranchIds.has(branch.id)) {
         await this.deleteBranch(branch.id);
       }
+    }
+  }
+
+  /**
+   * Record a store page view
+   * Tracks when a user opens/views a store page
+   * @param storeName - The name of the store being viewed
+   * @param userId - Optional user ID (for anonymous users, this could be their anonymous ID)
+   * @param ipAddress - Optional IP address
+   * @param userAgent - Optional user agent string
+   * @returns The created user action record
+   */
+  async recordStorePageView(
+    storeName: string,
+    userId?: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<any> {
+    try {
+      let storeId: string | undefined;
+
+      // Get the store to find its ID
+      // Try exact match first, then try replacing underscores with spaces
+      let store = await this.storeRepository.findOne({
+        where: { name: storeName },
+      });
+
+      // If not found, try replacing underscores with spaces (for URL-safe names)
+      if (!store && storeName.includes('_')) {
+        const storeNameWithSpaces = storeName.replace(/_/g, ' ');
+        store = await this.storeRepository.findOne({
+          where: { name: storeNameWithSpaces },
+        });
+        this.logger.log(
+          `Store lookup: tried with spaces: ${storeNameWithSpaces}, found: ${!!store}`
+        );
+      }
+
+      if (store) {
+        storeId = store.id;
+        this.logger.log(
+          `Recording store page view for store: ${store.name} (ID: ${store.id}), user: ${userId || 'anonymous'}`
+        );
+      } else {
+        this.logger.warn(
+          `Store not found for name: ${storeName}. Recording action without store reference.`
+        );
+      }
+
+      const actionResult = await this.userActionService.recordAction(
+        userId,
+        {
+          action_type: ActionType.STORE_DETAILS_OPEN,
+          store_id: storeId,
+          metadata: {
+            store_name: storeName,
+            lookup_attempted: true,
+          },
+        },
+        ipAddress,
+        userAgent
+      );
+
+      this.logger.log(
+        `Successfully recorded store page view. Action ID: ${actionResult.id}, store_id: ${storeId || 'null'}`
+      );
+      return actionResult;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : '';
+      this.logger.error(
+        `Failed to record store page view for store ${storeName}: ${errorMessage}`
+      );
+      this.logger.error(errorStack);
+      // Don't throw - we still want to allow the page to load even if tracking fails
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a user is the owner of a specific store
+   * @param userId - The user ID to check
+   * @param storeId - The store ID to check against
+   * @returns true if user is the owner of the store, false otherwise
+   */
+  async isUserOwnerOfStore(userId: string, storeId: string): Promise<boolean> {
+    if (!userId || !storeId) {
+      return false;
+    }
+
+    try {
+      const store = await this.storeRepository.findOne({
+        where: { id: storeId },
+      });
+
+      return store ? store.owner_id === userId : false;
+    } catch (error) {
+      this.logger.warn(
+        `Error checking if user ${userId} is owner of store ${storeId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      );
+      return false;
     }
   }
 }

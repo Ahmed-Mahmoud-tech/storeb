@@ -32,20 +32,24 @@ export class FavoriteService {
     console.error('\n\n=== FAVORITE CREATE START ===');
     console.error(`Creating favorite: ${JSON.stringify(createFavoriteDto)}`);
     this.logger.log(`Creating favorite: ${JSON.stringify(createFavoriteDto)}`);
-    
+
     const favorite = this.favoriteRepository.create(createFavoriteDto);
     const savedFavorite = await this.favoriteRepository.save(favorite);
-    
+
     console.error(`Favorite saved: ${savedFavorite.id}`);
     console.error('Now attempting to track action...');
     this.logger.log('Favorite saved, now attempting to track action...');
-    
+
     // Track the favorite action
     try {
-      console.error(`About to get branches for product: ${createFavoriteDto.product}`);
-      this.logger.log(`Tracking favorite action for product: ${createFavoriteDto.product}`);
+      console.error(
+        `About to get branches for product: ${createFavoriteDto.product}`
+      );
+      this.logger.log(
+        `Tracking favorite action for product: ${createFavoriteDto.product}`
+      );
       this.logger.log(`User ID: ${createFavoriteDto.user_id}`);
-      
+
       // Get product details to find store_id
       let storeId: string | undefined;
       try {
@@ -55,7 +59,7 @@ export class FavoriteService {
         );
         console.error(`Got branchIds: ${JSON.stringify(branchIds)}`);
         this.logger.log(`Found ${branchIds.length} branches for product`);
-        
+
         if (branchIds && branchIds.length > 0) {
           // Get the first branch to find store_id
           const branch = await this.branchRepository.findOne({
@@ -71,26 +75,32 @@ export class FavoriteService {
             this.logger.warn(`Branch not found for ID: ${branchIds[0]}`);
           }
         } else {
-          console.error(`No branches found for product: ${createFavoriteDto.product}`);
-          this.logger.warn(`No branches found for product: ${createFavoriteDto.product}`);
+          console.error(
+            `No branches found for product: ${createFavoriteDto.product}`
+          );
+          this.logger.warn(
+            `No branches found for product: ${createFavoriteDto.product}`
+          );
         }
       } catch (error: any) {
         console.error(`Error getting store_id: ${error?.message}`);
         console.error(`Stack: ${error?.stack}`);
-        this.logger.error(`Error getting store_id from product: ${error?.message}`);
+        this.logger.error(
+          `Error getting store_id from product: ${error?.message}`
+        );
         this.logger.error(error?.stack);
       }
 
       console.error('About to call userActionService.recordAction...');
       console.error(
         `Parameters: userId=${createFavoriteDto.user_id}, action_type=PRODUCT_FAVORITE, ` +
-        `product_id=${createFavoriteDto.product}, store_id=${storeId}`
+          `product_id=${createFavoriteDto.product}, store_id=${storeId}`
       );
       this.logger.log('Calling userActionService.recordAction...');
       this.logger.log(`   - User ID: ${createFavoriteDto.user_id}`);
       this.logger.log(`   - Product ID: ${createFavoriteDto.product}`);
       this.logger.log(`   - Store ID: ${storeId}`);
-      
+
       const actionResult = await this.userActionService.recordAction(
         createFavoriteDto.user_id,
         {
@@ -101,11 +111,17 @@ export class FavoriteService {
         undefined,
         undefined
       );
-      
-      console.error(`Successfully tracked action! Record ID: ${actionResult.id}`);
-      this.logger.log(`Successfully tracked favorite action! Record ID: ${actionResult.id}`);
+
+      console.error(
+        `Successfully tracked action! Record ID: ${actionResult.id}`
+      );
+      this.logger.log(
+        `Successfully tracked favorite action! Record ID: ${actionResult.id}`
+      );
     } catch (error: any) {
-      console.error('\n!!! CRITICAL ERROR - Failed to track favorite action !!!');
+      console.error(
+        '\n!!! CRITICAL ERROR - Failed to track favorite action !!!'
+      );
       console.error(`Error: ${error?.message}`);
       console.error(`Stack: ${error?.stack}`);
       this.logger.error('CRITICAL ERROR - Failed to track favorite action:');
@@ -113,7 +129,7 @@ export class FavoriteService {
       this.logger.error(`Stack: ${error?.stack}`);
       // Don't throw - we still want the favorite to be saved even if tracking fails
     }
-    
+
     console.error('=== FAVORITE CREATE END ===\n');
     return savedFavorite;
   }
@@ -143,7 +159,7 @@ export class FavoriteService {
   async remove(id: string): Promise<void> {
     this.logger.log(`Removing favorite with id: ${id}`);
     const favorite = await this.findOne(id);
-    
+
     // Track the unfavorite action
     try {
       // Get store_id from product
@@ -177,7 +193,7 @@ export class FavoriteService {
     } catch (error) {
       this.logger.error('Failed to track unfavorite action:', error);
     }
-    
+
     await this.favoriteRepository.remove(favorite);
   }
 
@@ -192,13 +208,14 @@ export class FavoriteService {
       where: { user_id, product },
     });
     if (!favorite) throw new NotFoundException('Favorite not found');
-    
+
     // Track the unfavorite action
     try {
       // Get store_id from product
       let storeId: string | undefined;
       try {
-        const branchIds = await this.productService.findProductBranches(product);
+        const branchIds =
+          await this.productService.findProductBranches(product);
         if (branchIds && branchIds.length > 0) {
           const branch = await this.branchRepository.findOne({
             where: { id: branchIds[0] },
@@ -224,7 +241,7 @@ export class FavoriteService {
     } catch (error) {
       this.logger.error('Failed to track unfavorite action:', error);
     }
-    
+
     await this.favoriteRepository.remove(favorite);
   }
 

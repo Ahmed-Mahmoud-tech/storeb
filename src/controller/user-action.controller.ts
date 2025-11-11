@@ -10,7 +10,10 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { UserActionService } from '../services/user-action.service';
-import { CreateUserActionDto, GetUserActionsQueryDto } from '../dto/user-action.dto';
+import {
+  CreateUserActionDto,
+  GetUserActionsQueryDto,
+} from '../dto/user-action.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('user-actions')
@@ -18,18 +21,19 @@ export class UserActionController {
   constructor(private readonly userActionService: UserActionService) {}
 
   /**
-   * Record a user action
+   * Record a user action (supports both authenticated and anonymous users)
    * POST /user-actions
    */
   @Post()
-  @UseGuards(JwtAuthGuard)
   async recordAction(
     @Body() createUserActionDto: CreateUserActionDto,
     @Req() request: Request
   ) {
-    const userId = (request.user as any)?.id;
-    const ipAddress = request.ip || request.headers['x-forwarded-for'] as string;
-    const userAgent = request.headers['user-agent'];
+    const user = request.user as { id: string } | undefined;
+    const userId = user?.id || createUserActionDto.user_id;
+    const ipAddress =
+      request.ip || (request.headers['x-forwarded-for'] as string) || '';
+    const userAgent = request.headers['user-agent'] || '';
 
     return await this.userActionService.recordAction(
       userId,
@@ -49,7 +53,11 @@ export class UserActionController {
     @Query() query: GetUserActionsQueryDto,
     @Req() request: Request
   ) {
-    const userId = (request.user as any)?.id;
+    const user = request.user as { id: string } | undefined;
+    const userId = user?.id;
+    if (!userId) {
+      throw new Error('User ID not found');
+    }
     return await this.userActionService.getUserActions(userId, query);
   }
 
@@ -60,7 +68,11 @@ export class UserActionController {
   @Get('me/stats')
   @UseGuards(JwtAuthGuard)
   async getMyStats(@Req() request: Request) {
-    const userId = (request.user as any)?.id;
+    const user = request.user as { id: string } | undefined;
+    const userId = user?.id;
+    if (!userId) {
+      throw new Error('User ID not found');
+    }
     return await this.userActionService.getUserActionStats(userId);
   }
 
@@ -101,5 +113,30 @@ export class UserActionController {
     @Query() query: GetUserActionsQueryDto
   ) {
     return await this.userActionService.getProductActions(productId, query);
+  }
+
+  /**
+   * Record a search action in a store
+   * POST /user-actions/search
+   * Body: { storeId: string, searchQuery: string, user_id?: string }
+   */
+  @Post('search')
+  async recordSearch(
+    @Body() body: { storeId: string; searchQuery: string; user_id?: string },
+    @Req() request: Request
+  ) {
+    const user = request.user as { id: string } | undefined;
+    const userId = user?.id || body.user_id;
+    const ipAddress =
+      request.ip || (request.headers['x-forwarded-for'] as string) || '';
+    const userAgent = request.headers['user-agent'] || '';
+
+    return await this.userActionService.recordSearch(
+      userId,
+      body.storeId,
+      body.searchQuery,
+      ipAddress,
+      userAgent
+    );
   }
 }

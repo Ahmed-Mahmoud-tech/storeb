@@ -14,7 +14,9 @@ import {
   OnModuleInit,
   Patch,
   Logger,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { StoreService } from '../services/store.service';
 import { FileUploadService } from '../services/file-upload.service';
 import { CreateStoreDto } from '../dto/store.dto';
@@ -197,6 +199,65 @@ export class StoreController implements OnModuleInit {
     const store = await this.storeService.findStoreByName(name);
     this.logger.log(`Retrieved store by name: ${store.name} (ID: ${store.id})`);
     return store;
+  }
+
+  /**
+   * Record a store page view
+   * Tracks when a user opens/views a store page (supports anonymous users)
+   * POST /stores/record-page-view/:storeName
+   */
+  @Post('record-page-view/:storeName')
+  async recordStorePageView(
+    @Param('storeName') storeName: string,
+    @Body() body: { user_id?: string },
+    @Req() request: Request
+  ): Promise<{ message: string; success: boolean; data?: any }> {
+    try {
+      // Decode the store name in case it's URL encoded
+      const decodedStoreName = decodeURIComponent(storeName);
+
+      const user = request.user as { id: string } | undefined;
+      const userId = user?.id || body.user_id;
+      const ipAddress =
+        request.ip || (request.headers['x-forwarded-for'] as string) || '';
+      const userAgent = request.headers['user-agent'] || '';
+
+      this.logger.log(
+        `Received store page view request: encoded=${storeName}, decoded=${decodedStoreName}, userId=${userId || 'anonymous'}`
+      );
+
+      const result = await this.storeService.recordStorePageView(
+        decodedStoreName,
+        userId,
+        ipAddress,
+        userAgent
+      );
+
+      const resultId =
+        typeof result === 'object' && result !== null && 'id' in result
+          ? (result as { id: string }).id
+          : 'unknown';
+      this.logger.log(
+        `Store page view recorded for: ${decodedStoreName}, user: ${userId || 'anonymous'}, action id: ${resultId}`
+      );
+      return {
+        message: `Store page view recorded successfully`,
+        success: true,
+        data: { actionId: resultId },
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to record store page view for ${storeName}: ${errorMessage}`
+      );
+      // Log full error for debugging
+      this.logger.error(`Full error:`, error);
+      return {
+        message: `Failed to record store page view: ${errorMessage}`,
+        success: false,
+      };
+    }
   }
 
   /**
@@ -427,7 +488,7 @@ export class StoreController implements OnModuleInit {
       );
       return store;
     } catch (error) {
-      if (error.status === 404) {
+      if (error instanceof Error && 'status' in error && error.status === 404) {
         // Owner doesn't have a store yet, return null instead of throwing error
         this.logger.log(`No store found for owner ${ownerId}`);
         return null;

@@ -38,7 +38,6 @@ import { FavoriteController } from './controller/favorite.controller';
 import { UserAction } from './model/user-actions.model';
 import { UserActionService } from './services/user-action.service';
 import { UserActionController } from './controller/user-action.controller';
-import { TestTrackingController } from './controller/test-tracking.controller';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
@@ -180,7 +179,6 @@ import 'winston-daily-rotate-file';
     CustomerProductController,
     FavoriteController,
     UserActionController,
-    TestTrackingController,
   ],
   providers: [
     AppService,

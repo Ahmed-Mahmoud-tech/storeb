@@ -16,9 +16,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { ProductService } from '../services/product.service';
 import { FileUploadService } from '../services/file-upload.service';
 import { FavoriteService } from '../services/favorite.service';
+import { UserActionService } from '../services/user-action.service';
+import { StoreService } from '../services/store.service';
+import { EmployeeService } from '../services/employee.service';
 import { CreateProductDto, UpdateProductDto } from '../dto/product.dto';
 import { Product } from '../model/product.model';
 import { AuthHelper } from '../utils/auth.helper';
@@ -33,7 +37,10 @@ export class ProductController implements OnModuleInit {
   constructor(
     private readonly productService: ProductService,
     private readonly fileUploadService: FileUploadService,
-    private readonly favoriteService: FavoriteService
+    private readonly favoriteService: FavoriteService,
+    private readonly userActionService: UserActionService,
+    private readonly storeService: StoreService,
+    private readonly employeeService: EmployeeService
   ) {}
 
   onModuleInit() {
@@ -172,6 +179,13 @@ export class ProductController implements OnModuleInit {
     @Query('createdBy') createdBy?: string,
     @Query('sale') sale?: string
   ) {
+    // Log all incoming parameters for debugging
+    this.logger.log(`=== findAll called ===`);
+    this.logger.log(`search: "${search}"`);
+    this.logger.log(`storeId: "${storeId}"`);
+    this.logger.log(`storeName: "${storeName}"`);
+    this.logger.log(`Full query params: ${JSON.stringify(req.query)}`);
+
     // Get user ID from authorization token
     const authHeader = req.headers.authorization;
     this.logger.log('Auth header found:', authHeader);
@@ -233,6 +247,135 @@ export class ProductController implements OnModuleInit {
     const createdByBool = createdBy === 'true' || createdBy === '1';
     // Convert sale to boolean
     const saleBool = sale === 'true' || sale === '1';
+
+    // Track search if search query is provided
+    // Track ANY filter application (search, category, tags, status, etc.)
+    // User is applying filters even if search input is empty
+    const hasFilters = search || category || tag || status || sale;
+    if (hasFilters) {
+      // Determine filter type for logging
+      const filterTypes = [];
+      if (search) filterTypes.push(`search:"${search.trim()}"`);
+      if (category) filterTypes.push(`category:"${category}"`);
+      if (tag)
+        filterTypes.push(`tag:"${Array.isArray(tag) ? tag.join(',') : tag}"`);
+      if (status)
+        filterTypes.push(
+          `status:"${Array.isArray(status) ? status.join(',') : status}"`
+        );
+      if (sale) filterTypes.push(`sale:"${sale}"`);
+
+      this.logger.log(
+        `🔍 FILTER DETECTED: ${filterTypes.join(', ')} | storeId: "${storeId}", storeName: "${storeName}"`
+      );
+
+      if (storeId || storeName) {
+        try {
+          // Get storeId - either directly provided or lookup by storeName
+          let filterStoreId = storeId;
+          if (!filterStoreId && storeName) {
+            try {
+              this.logger.log(`  Looking up store by name: "${storeName}"`);
+              const store = await this.storeService.findStoreByName(storeName);
+              filterStoreId = store?.id;
+              this.logger.log(
+                `  Looked up storeId "${filterStoreId}" for storeName "${storeName}"`
+              );
+            } catch (error) {
+              this.logger.warn(
+                `  Failed to lookup store by name "${storeName}": ${
+                  error instanceof Error ? error.message : 'unknown error'
+                }`
+              );
+            }
+          }
+
+          if (filterStoreId) {
+            const ipAddress =
+              req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown';
+            const userAgent = req.headers['user-agent'] || 'unknown';
+            const userId = user?.userId || uuidv4();
+
+            // Check if user is staff (manager/sales) or owner of this store
+            // If they are, don't record their action
+            const isStaff = await this.employeeService.isUserStaffOfStore(
+              userId,
+              filterStoreId
+            );
+            const isOwner = await this.storeService.isUserOwnerOfStore(
+              userId,
+              filterStoreId
+            );
+
+            if (isStaff || isOwner) {
+              this.logger.log(
+                `⏭️  Skipping filter tracking for staff/owner: userId="${userId}", storeId="${filterStoreId}"`
+              );
+              return;
+            }
+
+            // Build search query string from all filters applied
+            const searchQueryParts = [];
+            if (search) searchQueryParts.push(search.trim());
+            if (category) searchQueryParts.push(`category:${category}`);
+            if (tag)
+              searchQueryParts.push(
+                `tag:${Array.isArray(tag) ? tag.join(',') : tag}`
+              );
+            if (status)
+              searchQueryParts.push(
+                `status:${Array.isArray(status) ? status.join(',') : status}`
+              );
+            if (sale) searchQueryParts.push(`sale:${sale}`);
+
+            const finalSearchQuery =
+              searchQueryParts.length > 0
+                ? searchQueryParts.join(' | ')
+                : 'filter-applied';
+
+            this.logger.log(
+              `  Recording filter action: userId="${userId}", storeId="${filterStoreId}", query="${finalSearchQuery}"`
+            );
+
+            // Record the filter action asynchronously without blocking the response
+            this.userActionService
+              .recordSearch(
+                userId,
+                filterStoreId,
+                finalSearchQuery,
+                ipAddress,
+                userAgent
+              )
+              .then(() => {
+                this.logger.log(
+                  `  ✅ Filter tracked successfully: "${finalSearchQuery}"`
+                );
+              })
+              .catch((error: unknown) => {
+                this.logger.warn(
+                  `  ❌ Failed to record filter action: ${
+                    error instanceof Error ? error.message : 'unknown error'
+                  }`
+                );
+              });
+          } else {
+            this.logger.warn(
+              `  ⚠️ Could not determine storeId for filter tracking: storeId="${storeId}", storeName="${storeName}"`
+            );
+          }
+        } catch (error: unknown) {
+          this.logger.warn(
+            `  ❌ Error tracking filter: ${
+              error instanceof Error ? error.message : 'unknown error'
+            }`
+          );
+        }
+      } else {
+        this.logger.warn(
+          `  ⚠️ Search detected but no storeId or storeName provided`
+        );
+      }
+    }
 
     return await this.productService.findAll(
       limit ? +limit : 10,
