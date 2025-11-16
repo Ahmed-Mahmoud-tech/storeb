@@ -177,7 +177,8 @@ export class ProductController implements OnModuleInit {
     @Query('search') search?: string,
     @Query('storeName') storeName?: string,
     @Query('createdBy') createdBy?: string,
-    @Query('sale') sale?: string
+    @Query('sale') sale?: string,
+    @Query('appliedFilters') appliedFilters?: string
   ) {
     // Log all incoming parameters for debugging
     this.logger.log(`=== findAll called ===`);
@@ -321,27 +322,29 @@ export class ProductController implements OnModuleInit {
               `  Recording filter action: userId="${userId}", storeId="${filterStoreId}", query="${finalSearchQuery}"`
             );
 
-            // Record the filter action asynchronously without blocking the response
-            this.userActionService
-              .recordSearch(
-                userId,
-                filterStoreId,
-                finalSearchQuery,
-                ipAddress,
-                userAgent
-              )
-              .then(() => {
-                this.logger.log(
-                  `  ✅ Filter tracked successfully: "${finalSearchQuery}"`
-                );
-              })
-              .catch((error: unknown) => {
-                this.logger.warn(
-                  `  ❌ Failed to record filter action: ${
-                    error instanceof Error ? error.message : 'unknown error'
-                  }`
-                );
-              });
+            // Record the filter action asynchronously without blocking the response if appliedFilters is true
+            if (appliedFilters === 'true') {
+              this.userActionService
+                .recordSearch(
+                  userId,
+                  filterStoreId,
+                  finalSearchQuery,
+                  ipAddress,
+                  userAgent
+                )
+                .then(() => {
+                  this.logger.log(
+                    `  ✅ Filter tracked successfully: "${finalSearchQuery}"`
+                  );
+                })
+                .catch((error: unknown) => {
+                  this.logger.warn(
+                    `  ❌ Failed to record filter action: ${
+                      error instanceof Error ? error.message : 'unknown error'
+                    }`
+                  );
+                });
+            }
           } else {
             this.logger.warn(
               `  ⚠️ Could not determine storeId for filter tracking: storeId="${storeId}", storeName="${storeName}"`
