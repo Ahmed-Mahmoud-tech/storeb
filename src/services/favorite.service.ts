@@ -82,13 +82,23 @@ export class FavoriteService {
             `No branches found for product: ${createFavoriteDto.product}`
           );
         }
-      } catch (error: any) {
-        console.error(`Error getting store_id: ${error?.message}`);
-        console.error(`Stack: ${error?.stack}`);
+      } catch (error: unknown) {
+        let errorMessage = 'Unknown error';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'object' && error !== null) {
+          errorMessage = JSON.stringify(error);
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+
+        const err = error instanceof Error ? error : new Error(errorMessage);
+        console.error(`Error getting store_id: ${err.message}`);
+        console.error(`Stack: ${err.stack}`);
         this.logger.error(
-          `Error getting store_id from product: ${error?.message}`
+          `Error getting store_id from product: ${err.message}`
         );
-        this.logger.error(error?.stack);
+        this.logger.error(err.stack);
       }
 
       console.error('About to call userActionService.recordAction...');
@@ -118,15 +128,25 @@ export class FavoriteService {
       this.logger.log(
         `Successfully tracked favorite action! Record ID: ${actionResult.id}`
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(
         '\n!!! CRITICAL ERROR - Failed to track favorite action !!!'
       );
-      console.error(`Error: ${error?.message}`);
-      console.error(`Stack: ${error?.stack}`);
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      const err = error instanceof Error ? error : new Error(errorMessage);
+      console.error(`Error: ${err.message}`);
+      console.error(`Stack: ${err.stack}`);
       this.logger.error('CRITICAL ERROR - Failed to track favorite action:');
-      this.logger.error(`Error: ${error?.message}`);
-      this.logger.error(`Stack: ${error?.stack}`);
+      this.logger.error(`Error: ${err.message}`);
+      this.logger.error(`Stack: ${err.stack}`);
       // Don't throw - we still want the favorite to be saved even if tracking fails
     }
 

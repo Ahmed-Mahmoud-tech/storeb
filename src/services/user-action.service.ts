@@ -64,11 +64,21 @@ export class UserActionService {
       this.logger.log(`Successfully saved action with ID: ${savedAction.id}`);
 
       return savedAction;
-    } catch (error: any) {
-      console.error(`!!! ERROR in recordAction: ${error?.message}`);
-      console.error(`Stack: ${error?.stack}`);
-      this.logger.error(`Failed to record action: ${error?.message}`);
-      this.logger.error(error?.stack);
+    } catch (error: unknown) {
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      const err = error instanceof Error ? error : new Error(errorMessage);
+      console.error(`!!! ERROR in recordAction: ${err.message}`);
+      console.error(`Stack: ${err.stack}`);
+      this.logger.error(`Failed to record action: ${err.message}`);
+      this.logger.error(err.stack);
       throw new HttpException(
         'Failed to record user action',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -98,7 +108,7 @@ export class UserActionService {
       offset = '0',
     } = query;
 
-    const whereClause: any = { user_id: userId };
+    const whereClause: Record<string, any> = { user_id: userId };
 
     if (action_type) {
       whereClause.action_type = action_type;
@@ -196,7 +206,7 @@ export class UserActionService {
     const pageSize = parseInt(limit, 10);
     const offset = (pageNum - 1) * pageSize;
 
-    const whereClause: any = { store_id: storeId };
+    const whereClause: Record<string, any> = { store_id: storeId };
 
     if (action_type) {
       whereClause.action_type = action_type;
@@ -250,7 +260,7 @@ export class UserActionService {
       offset = '0',
     } = query;
 
-    const whereClause: any = { product_id: productId };
+    const whereClause: Record<string, any> = { product_id: productId };
 
     if (action_type) {
       whereClause.action_type = action_type;
