@@ -31,6 +31,14 @@ export class UserActionController {
   ) {
     const user = request.user as { id: string } | undefined;
     const userId = user?.id || createUserActionDto.user_id;
+
+    // If no user ID from auth or DTO, reject the request
+    if (!userId) {
+      throw new Error(
+        'User ID is required. Either authenticate or provide user_id in the request body.'
+      );
+    }
+
     const ipAddress =
       request.ip || (request.headers['x-forwarded-for'] as string) || '';
     const userAgent = request.headers['user-agent'] || '';
