@@ -6,6 +6,11 @@ import {
   CreateUserActionDto,
   GetUserActionsQueryDto,
 } from '../dto/user-action.dto';
+import { Store } from '../model/store.model';
+import { EmployeeService } from './employee.service';
+import { Branch } from '../model/branches.model';
+import { Product } from '../model/product.model';
+import { ProductBranch } from '../model/product_branches.model';
 
 @Injectable()
 export class UserActionService {
@@ -13,8 +18,91 @@ export class UserActionService {
 
   constructor(
     @InjectRepository(UserAction)
-    private readonly userActionRepository: Repository<UserAction>
+    private readonly userActionRepository: Repository<UserAction>,
+    @InjectRepository(Store)
+    private readonly storeRepository: Repository<Store>,
+    @InjectRepository(Branch)
+    private readonly branchRepository: Repository<Branch>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
+    @InjectRepository(ProductBranch)
+    private readonly productBranchRepository: Repository<ProductBranch>,
+    private readonly employeeService: EmployeeService
   ) {}
+
+  /**
+   * Check if user is owner or staff of a store
+   * @param userId - The user ID to check
+   * @param storeId - The store ID to check
+   * @returns true if user is owner or staff, false otherwise
+   */
+  private async isUserOwnerOrStaffOfStore(
+    userId: string,
+    storeId: string
+  ): Promise<boolean> {
+    try {
+      const store = await this.storeRepository.findOne({
+        where: { id: storeId },
+      });
+
+      if (!store) {
+        return false;
+      }
+
+      // Check if user is the owner
+      if (store.owner_id === userId) {
+        return true;
+      }
+
+      // Check if user is staff (manager or sales)
+      const isStaff = await this.employeeService.isUserStaffOfStore(
+        userId,
+        storeId
+      );
+      return isStaff;
+    } catch (error) {
+      this.logger.warn(
+        `Error checking if user ${userId} is owner/staff of store ${storeId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Get the store ID for a product
+   * @param productId - The product ID
+   * @returns The store ID if product belongs to a store, null otherwise
+   */
+  private async getStoreIdForProduct(
+    productId: string
+  ): Promise<string | null> {
+    try {
+      // Get product branches for this product
+      const productBranch = await this.productBranchRepository.findOne({
+        where: { product_code: productId },
+      });
+
+      if (!productBranch || !productBranch.branch_id) {
+        return null;
+      }
+
+      // Get the branch to find its store
+      const branch = await this.branchRepository.findOne({
+        where: { id: productBranch.branch_id },
+      });
+
+      return branch?.store_id || null;
+    } catch (error) {
+      this.logger.warn(
+        `Error getting store for product ${productId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`
+      );
+      return null;
+    }
+  }
 
   /**
    * Record a user action
@@ -22,14 +110,14 @@ export class UserActionService {
    * @param createUserActionDto - The action data
    * @param ipAddress - Optional IP address
    * @param userAgent - Optional user agent string
-   * @returns The created user action record
+   * @returns The created user action record or null if user is owner/staff of the store
    */
   async recordAction(
     userId: string,
     createUserActionDto: CreateUserActionDto,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<UserAction> {
+  ): Promise<UserAction | null> {
     console.error(`\n>>> UserActionService.recordAction CALLED <<<`);
     console.error(
       `Recording action: ${createUserActionDto.action_type} for user: ${userId}`
@@ -41,6 +129,37 @@ export class UserActionService {
     this.logger.log(`Action details: ${JSON.stringify(createUserActionDto)}`);
 
     try {
+      let storeIdToCheck: string | undefined;
+
+      // Determine which store to check based on action type and available data
+      if (createUserActionDto.store_id) {
+        storeIdToCheck = createUserActionDto.store_id;
+      } else if (createUserActionDto.product_id) {
+        // If product is involved, get the store that owns the product
+        const productStore = await this.getStoreIdForProduct(
+          createUserActionDto.product_id
+        );
+        if (productStore) {
+          storeIdToCheck = productStore;
+        }
+      }
+
+      // Check if user is owner or staff of the store involved in this action
+      if (storeIdToCheck) {
+        const isOwnerOrStaff = await this.isUserOwnerOrStaffOfStore(
+          userId,
+          storeIdToCheck
+        );
+
+        if (isOwnerOrStaff) {
+          this.logger.log(
+            `Action skipped: User ${userId} is owner/staff of store ${storeIdToCheck}`
+          );
+          console.error('Action skipped: User is owner or staff of the store');
+          return null;
+        }
+      }
+
       const userAction = this.userActionRepository.create({
         user_id: userId,
         action_type: createUserActionDto.action_type,
@@ -306,7 +425,7 @@ export class UserActionService {
     searchQuery: string,
     ipAddress?: string,
     userAgent?: string
-  ): Promise<UserAction> {
+  ): Promise<UserAction | null> {
     this.logger.log(
       `Recording search: "${searchQuery}" in store: ${storeId}, user: ${userId || 'anonymous'}`
     );

@@ -122,12 +122,17 @@ export class FavoriteService {
         undefined
       );
 
-      console.error(
-        `Successfully tracked action! Record ID: ${actionResult.id}`
-      );
-      this.logger.log(
-        `Successfully tracked favorite action! Record ID: ${actionResult.id}`
-      );
+      if (actionResult) {
+        console.error(
+          `Successfully tracked action! Record ID: ${actionResult.id}`
+        );
+        this.logger.log(
+          `Successfully tracked favorite action! Record ID: ${actionResult.id}`
+        );
+      } else {
+        console.error('Action was skipped (user is owner/staff of store)');
+        this.logger.log('Action was skipped (user is owner/staff of store)');
+      }
     } catch (error: unknown) {
       console.error(
         '\n!!! CRITICAL ERROR - Failed to track favorite action !!!'

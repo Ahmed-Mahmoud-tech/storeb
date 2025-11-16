@@ -456,7 +456,7 @@ export class StoreService {
       const actionResult = await this.userActionService.recordAction(
         userId,
         {
-          action_type: ActionType.STORE_DETAILS_OPEN,
+          action_type: ActionType.store_visit,
           store_id: storeId,
           metadata: {
             store_name: storeName,
@@ -467,9 +467,13 @@ export class StoreService {
         userAgent
       );
 
-      this.logger.log(
-        `Successfully recorded store page view. Action ID: ${actionResult.id}, store_id: ${storeId || 'null'}`
-      );
+      if (actionResult) {
+        this.logger.log(
+          `Successfully recorded store page view. Action ID: ${actionResult.id}, store_id: ${storeId || 'null'}`
+        );
+      } else {
+        this.logger.log('Store visit action skipped (user is owner/staff)');
+      }
       return actionResult;
     } catch (error) {
       const errorMessage =
@@ -599,7 +603,6 @@ export class StoreService {
    * @param storeName - The name of the store
    * @returns Array of categories with product count
    */
-  /* eslint-disable */
   async getStoreWithCategoriesByName(
     storeName: string
   ): Promise<{ store: any; categories: any[] }> {
@@ -712,5 +715,4 @@ export class StoreService {
 
     return result;
   }
-  /* eslint-enable */
 }

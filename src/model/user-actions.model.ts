@@ -12,7 +12,7 @@ import { Product } from './product.model';
 
 export enum ActionType {
   HOME_PAGE_VISIT = 'home_page_visit',
-  STORE_DETAILS_OPEN = 'store_details_open',
+  store_visit = 'store_visit',
   PRODUCT_VIEW = 'product_view',
   PRODUCT_FAVORITE = 'product_favorite',
   PRODUCT_UNFAVORITE = 'product_unfavorite',

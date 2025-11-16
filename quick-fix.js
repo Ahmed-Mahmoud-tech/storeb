@@ -14,7 +14,7 @@ async function fixRecord() {
 
     const result = await client.query(
       'UPDATE user_actions SET store_id = $1 WHERE action_type = $2 AND store_id IS NULL',
-      ['4ccd6ca7-fccc-4d58-8555-4da4db8c5aa2', 'store_details_open']
+      ['4ccd6ca7-fccc-4d58-8555-4da4db8c5aa2', 'store_visit']
     );
 
     console.log(`✓ Updated ${result.rowCount} records`);
@@ -22,7 +22,7 @@ async function fixRecord() {
     // Verify
     const check = await client.query(
       'SELECT id, store_id, action_type FROM user_actions WHERE action_type = $1 LIMIT 1',
-      ['store_details_open']
+      ['store_visit']
     );
 
     if (check.rows.length > 0) {
