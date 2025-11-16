@@ -510,4 +510,207 @@ export class StoreService {
       return false;
     }
   }
+
+  /**
+   * Get all categories that have products for a specific store
+   * @param storeId - The ID of the store
+   * @returns Array of categories with product count
+   */
+  async getStoreCategoriesWithProducts(storeId: string): Promise<
+    Array<{
+      category: string;
+      productCount: number;
+    }>
+  > {
+    this.logger.log(`Fetching categories with products for store: ${storeId}`);
+
+    try {
+      // Get branches for this store
+      const branches = await this.branchRepository.find({
+        where: { store_id: storeId },
+      });
+
+      if (branches.length === 0) {
+        this.logger.warn(`No branches found for store: ${storeId}`);
+        return [];
+      }
+
+      const branchIds = branches.map((b) => b.id);
+
+      // Get all product-branch relationships for these branches using query builder
+      const productBranches = await this.storeRepository.manager
+        .createQueryBuilder()
+        .select('DISTINCT product_branch.product_code')
+        .from('product_branch', 'product_branch')
+        .where('product_branch.branch_id IN (:...branchIds)', { branchIds })
+        .getRawMany();
+
+      if (productBranches.length === 0) {
+        this.logger.log(`No products found for store: ${storeId}`);
+        return [];
+      }
+
+      const productCodes = productBranches.map(
+        (pb: { product_code: string }) => pb.product_code
+      );
+
+      // Get categories with product count using query builder
+      const categories = await this.storeRepository.manager
+        .createQueryBuilder()
+        .select('product.category', 'category')
+        .addSelect('COUNT(product.product_code)', 'productCount')
+        .from('product', 'product')
+        .where('product.product_code IN (:...productCodes)', { productCodes })
+        .andWhere('product.category IS NOT NULL')
+        .groupBy('product.category')
+        .orderBy('product.category', 'ASC')
+        .getRawMany();
+
+      if (categories.length === 0) {
+        return [];
+      }
+
+      // Map to response format
+      const result = categories.map(
+        (c: { category: string; productCount: string }) => ({
+          category: c.category,
+          productCount: parseInt(c.productCount, 10),
+        })
+      );
+
+      this.logger.log(
+        `Successfully fetched ${result.length} categories for store ${storeId}`
+      );
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error fetching categories for store ${storeId}:`,
+        error instanceof Error ? error.message : 'unknown error'
+      );
+      throw new NotFoundException(
+        `Failed to fetch categories for store ${storeId}`
+      );
+    }
+  }
+
+  /**
+   * Get all categories that have products for a specific store by store name
+   * @param storeName - The name of the store
+   * @returns Array of categories with product count
+   */
+  /* eslint-disable */
+  async getStoreWithCategoriesByName(
+    storeName: string
+  ): Promise<{ store: any; categories: any[] }> {
+    // Find store
+    let store = await this.storeRepository.findOne({
+      where: { name: storeName },
+    });
+
+    if (!store && storeName.includes('_')) {
+      const nameWithSpaces = storeName.replace(/_/g, ' ');
+      store = await this.storeRepository.findOne({
+        where: { name: nameWithSpaces },
+      });
+    }
+
+    if (!store) {
+      throw new NotFoundException('Store not found: ' + storeName);
+    }
+
+    // Get categories
+    const categories =
+      await this.getStoreCategoriesWithProductsByName(storeName);
+
+    // Return store info + categories
+    return {
+      store: {
+        id: store.id,
+        name: store.name,
+        logo: store.logo,
+        banner: store.banner,
+        theme_color: store.theme_color,
+        delivery: store.delivery,
+        type: store.type,
+      },
+      categories: categories,
+    };
+  }
+
+  /* eslint-disable */
+  async getStoreCategoriesWithProductsByName(
+    storeName: string
+  ): Promise<any[]> {
+    // Find store
+    let store = await this.storeRepository.findOne({
+      where: { name: storeName },
+    });
+
+    if (!store && storeName.includes('_')) {
+      const nameWithSpaces = storeName.replace(/_/g, ' ');
+      store = await this.storeRepository.findOne({
+        where: { name: nameWithSpaces },
+      });
+    }
+
+    if (!store) {
+      throw new NotFoundException('Store not found: ' + storeName);
+    }
+
+    // Get all branches for this store
+    const branches = await this.branchRepository.find({
+      where: { store_id: store.id },
+    });
+
+    if (!branches || branches.length === 0) {
+      return [];
+    }
+
+    const branchIds = branches.map((b) => b.id);
+
+    // Get all product codes available in these branches
+    const productBranchRecords = await this.storeRepository.manager
+      .createQueryBuilder()
+      .select('DISTINCT product_branches.product_code', 'product_code')
+      .from('product_branches', 'product_branches')
+      .where('product_branches.branch_id IN (:...branchIds)', { branchIds })
+      .getRawMany();
+
+    if (!productBranchRecords || productBranchRecords.length === 0) {
+      return [];
+    }
+
+    const productCodes = productBranchRecords.map((r) => r.product_code);
+
+    // Get products with their categories
+    const products = await this.storeRepository.manager
+      .createQueryBuilder()
+      .select('product.category', 'category')
+      .from('product', 'product')
+      .where('product.product_code IN (:...productCodes)', { productCodes })
+      .andWhere('product.category IS NOT NULL')
+      .andWhere("product.category != ''")
+      .getRawMany();
+
+    if (!products || products.length === 0) {
+      return [];
+    }
+
+    // Extract unique categories as a flat array
+    const categorySet = new Set<string>();
+
+    for (const product of products) {
+      const categoryPath = product.category || '';
+      if (categoryPath.trim()) {
+        categorySet.add(categoryPath);
+      }
+    }
+
+    // Convert to array and sort
+    const result = Array.from(categorySet).sort();
+
+    return result;
+  }
+  /* eslint-enable */
 }

@@ -183,6 +183,28 @@ export class StoreController implements OnModuleInit {
   }
 
   /**
+   * Get store info with categories that have products
+   * Returns store data + categories with nested children
+   *
+   * GET /stores/categories
+   * Headers: x-store-name (store name)
+   */
+  @Get('categories')
+  async getStoreCategoriesWithProducts(
+    @Req() request: Request
+  ): Promise<{ store: any; categories: any[] }> {
+    const storeName = request.headers['x-store-name'] as string;
+
+    if (!storeName) {
+      throw new BadRequestException(
+        'Store name must be provided in x-store-name header'
+      );
+    }
+
+    return await this.storeService.getStoreWithCategoriesByName(storeName);
+  }
+
+  /**
    * Get a store by ID
    *
    * GET /stores/:id

@@ -6,10 +6,14 @@ import {
   Param,
   Put,
   Delete,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { CreateUserDto, UpdateUserDto } from '../dto/user.dto';
 import { User } from '../model/users.model';
 import { UserService } from '../services/user.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('users')
 export class UserController {
@@ -23,6 +27,21 @@ export class UserController {
   @Get()
   async getAllUsers(): Promise<User[]> {
     return await this.userService.getAllUsers();
+  }
+
+  /**
+   * Get current authenticated user from JWT token
+   * GET /users/me
+   */
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUser(@Req() request: Request): Promise<User> {
+    const user = request.user as { id: string } | undefined;
+    const userId = user?.id;
+    if (!userId) {
+      throw new Error('User ID not found in token');
+    }
+    return await this.userService.getUserById(userId);
   }
 
   @Get(':id')

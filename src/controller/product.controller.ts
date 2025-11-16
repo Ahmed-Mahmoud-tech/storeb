@@ -200,6 +200,7 @@ export class ProductController implements OnModuleInit {
 
     // Handle URL decoding for category parameter
     let processedCategory = category;
+    console.log('111111111111111111111x2');
     if (category) {
       try {
         console.log('Decoding category:', category);
@@ -212,6 +213,7 @@ export class ProductController implements OnModuleInit {
       this.logger.log('Original category parameter:', category);
       this.logger.log('Processed category parameter:', processedCategory);
     }
+    console.log('111111111111111111111x');
 
     // Handle URL decoding for tag parameter
     let processedTag = tag;
@@ -242,6 +244,7 @@ export class ProductController implements OnModuleInit {
       this.logger.log('Original tag parameter:', tag);
       this.logger.log('Processed tag parameter:', processedTag);
     }
+    console.log('111111111111111111111x3');
 
     // Convert createdBy to boolean
     const createdByBool = createdBy === 'true' || createdBy === '1';
@@ -296,25 +299,6 @@ export class ProductController implements OnModuleInit {
             const userAgent = req.headers['user-agent'] || 'unknown';
             const userId = user?.userId || uuidv4();
 
-            // Check if user is staff (manager/sales) or owner of this store
-            // If they are, don't record their action
-            const isStaff = await this.employeeService.isUserStaffOfStore(
-              userId,
-              filterStoreId
-            );
-            const isOwner = await this.storeService.isUserOwnerOfStore(
-              userId,
-              filterStoreId
-            );
-
-            if (isStaff || isOwner) {
-              this.logger.log(
-                `⏭️  Skipping filter tracking for staff/owner: userId="${userId}", storeId="${filterStoreId}"`
-              );
-              return;
-            }
-
-            // Build search query string from all filters applied
             const searchQueryParts = [];
             if (search) searchQueryParts.push(search.trim());
             if (category) searchQueryParts.push(`category:${category}`);
@@ -376,6 +360,7 @@ export class ProductController implements OnModuleInit {
         );
       }
     }
+    console.log('111111111111111111111x4');
 
     return await this.productService.findAll(
       limit ? +limit : 10,
