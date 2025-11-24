@@ -424,7 +424,6 @@ export class StoreService {
   ): Promise<any> {
     try {
       let storeId: string | undefined;
-
       // Get the store to find its ID
       // Try exact match first, then try replacing underscores with spaces
       let store = await this.storeRepository.findOne({

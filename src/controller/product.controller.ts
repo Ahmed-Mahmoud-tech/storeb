@@ -324,26 +324,50 @@ export class ProductController implements OnModuleInit {
 
             // Record the filter action asynchronously without blocking the response if appliedFilters is true
             if (appliedFilters === 'true') {
-              this.userActionService
-                .recordSearch(
-                  userId,
-                  filterStoreId,
-                  finalSearchQuery,
-                  ipAddress,
-                  userAgent
-                )
-                .then(() => {
-                  this.logger.log(
-                    `  ✅ Filter tracked successfully: "${finalSearchQuery}"`
-                  );
-                })
-                .catch((error: unknown) => {
-                  this.logger.warn(
-                    `  ❌ Failed to record filter action: ${
-                      error instanceof Error ? error.message : 'unknown error'
-                    }`
-                  );
-                });
+              try {
+                // Fire and forget - don't await to avoid blocking the response
+                // Use a promise handler to catch errors without throwing
+                this.userActionService
+                  .recordSearch(
+                    userId,
+                    filterStoreId,
+                    finalSearchQuery,
+                    ipAddress,
+                    userAgent
+                  )
+                  .then(() => {
+                    this.logger.log(
+                      `  ✅ Filter tracked successfully: "${finalSearchQuery}"`
+                    );
+                  })
+                  .catch((error: unknown) => {
+                    // Silently handle errors for anonymous users
+                    // Don't log as error - just skip tracking
+                    if (
+                      error instanceof Error &&
+                      error.message.includes('user action')
+                    ) {
+                      this.logger.debug(
+                        `  ℹ️ Filter tracking skipped (anonymous user): ${error.message}`
+                      );
+                    } else {
+                      this.logger.warn(
+                        `  ⚠️ Failed to track filter: ${
+                          error instanceof Error
+                            ? error.message
+                            : 'unknown error'
+                        }`
+                      );
+                    }
+                  });
+              } catch (error: unknown) {
+                // In case the call itself throws synchronously, catch and log but don't rethrow
+                this.logger.warn(
+                  `  ⚠️ Error initiating filter tracking: ${
+                    error instanceof Error ? error.message : 'unknown error'
+                  }`
+                );
+              }
             }
           } else {
             this.logger.warn(

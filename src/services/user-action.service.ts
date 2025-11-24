@@ -106,30 +106,82 @@ export class UserActionService {
 
   /**
    * Record a user action
-   * @param userId - The ID of the user performing the action
+   * @param userId - The ID of the user performing the action (can be a UUID or anon-* identifier for anonymous users)
    * @param createUserActionDto - The action data
    * @param ipAddress - Optional IP address
    * @param userAgent - Optional user agent string
    * @returns The created user action record or null if user is owner/staff of the store
    */
   async recordAction(
-    userId: string,
-    createUserActionDto: CreateUserActionDto,
+    userId?: string,
+    createUserActionDto?: CreateUserActionDto,
     ipAddress?: string,
     userAgent?: string
   ): Promise<UserAction | null> {
     console.error(`\n>>> UserActionService.recordAction CALLED <<<`);
     console.error(
-      `Recording action: ${createUserActionDto.action_type} for user: ${userId}`
+      `Recording action: ${createUserActionDto?.action_type} for user: ${userId || 'anonymous'}`
     );
     console.error(`Action details: ${JSON.stringify(createUserActionDto)}`);
     this.logger.log(
-      `Recording action: ${createUserActionDto.action_type} for user: ${userId}`
+      `Recording action: ${createUserActionDto?.action_type} for user: ${userId || 'anonymous'}`
     );
     this.logger.log(`Action details: ${JSON.stringify(createUserActionDto)}`);
+    // Validate required parameters
+    if (!userId || !createUserActionDto) {
+      this.logger.warn(
+        `Skipped recording action: missing userId or action data`
+      );
+      return null;
+    }
 
     try {
       let storeIdToCheck: string | undefined;
+      let realUserId: string | null = null;
+      let anonymousUserId: string | null = null;
+
+      // Determine if this is an anonymous user (starts with anon- or is not a valid UUID)
+      const isAnonymous =
+        userId.startsWith('anon-') || !this.isValidUuid(userId);
+
+      if (isAnonymous) {
+        // For anonymous users: store their identifier in anonymous_user_id, keep user_id as null
+        anonymousUserId = userId.startsWith('anon-')
+          ? userId
+          : `anon-${userId}`;
+        realUserId = null;
+        this.logger.log(`Anonymous user detected: ${anonymousUserId}`);
+      } else {
+        // For logged-in users: verify the user exists before storing their UUID
+        try {
+          const userExists = await this.storeRepository.manager
+            .createQueryBuilder()
+            .select('id')
+            .from('user', 'user')
+            .where('id = :userId', { userId })
+            .getRawOne();
+
+          if (userExists) {
+            realUserId = userId;
+            this.logger.log(`Logged-in user detected: ${realUserId}`);
+          } else {
+            // User ID is a valid UUID but doesn't exist - treat as anonymous
+            anonymousUserId = `anon-${userId}`;
+            realUserId = null;
+            this.logger.log(
+              `User ${userId} not found in database, treating as anonymous`
+            );
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Error verifying user ${userId} existence: ${
+              error instanceof Error ? error.message : 'unknown error'
+            }, treating as anonymous`
+          );
+          anonymousUserId = `anon-${userId}`;
+          realUserId = null;
+        }
+      }
 
       // Determine which store to check based on action type and available data
       if (createUserActionDto.store_id) {
@@ -144,16 +196,32 @@ export class UserActionService {
         }
       }
 
-      // Check if user is owner or staff of the store involved in this action
+      // Verify that the store_id exists in the database if provided
+      let validatedStoreId: string | null = null;
       if (storeIdToCheck) {
+        const storeExists = await this.storeRepository.findOne({
+          where: { id: storeIdToCheck },
+        });
+        if (storeExists) {
+          validatedStoreId = storeIdToCheck;
+        } else {
+          this.logger.warn(
+            `Store ${storeIdToCheck} does not exist. Recording action without store reference.`
+          );
+          storeIdToCheck = undefined;
+        }
+      }
+
+      // Check if user is owner or staff of the store involved in this action (only for real users)
+      if (validatedStoreId && realUserId) {
         const isOwnerOrStaff = await this.isUserOwnerOrStaffOfStore(
-          userId,
-          storeIdToCheck
+          realUserId,
+          validatedStoreId
         );
 
         if (isOwnerOrStaff) {
           this.logger.log(
-            `Action skipped: User ${userId} is owner/staff of store ${storeIdToCheck}`
+            `Action skipped: User ${realUserId} is owner/staff of store ${validatedStoreId}`
           );
           console.error('Action skipped: User is owner or staff of the store');
           return null;
@@ -161,10 +229,11 @@ export class UserActionService {
       }
 
       const userAction = this.userActionRepository.create({
-        user_id: userId,
+        user_id: realUserId || null,
+        anonymous_user_id: anonymousUserId,
         action_type: createUserActionDto.action_type,
-        store_id: createUserActionDto.store_id,
-        product_id: createUserActionDto.product_id,
+        store_id: validatedStoreId,
+        product_id: createUserActionDto.product_id || null,
         metadata: createUserActionDto.metadata,
         ip_address: ipAddress,
         user_agent: userAgent,
@@ -442,5 +511,16 @@ export class UserActionService {
       ipAddress,
       userAgent
     );
+  }
+
+  /**
+   * Check if a string is a valid UUID
+   * @param uuid - The string to validate
+   * @returns true if valid UUID, false otherwise
+   */
+  private isValidUuid(uuid: string): boolean {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
   }
 }

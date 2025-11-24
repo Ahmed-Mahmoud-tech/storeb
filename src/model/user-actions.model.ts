@@ -28,12 +28,15 @@ export class UserAction {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'uuid', nullable: false })
-  user_id!: string;
+  @Column({ type: 'uuid', nullable: true })
+  user_id?: string;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  anonymous_user_id?: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'user_id' })
-  user!: User;
+  user?: User;
 
   @Column({
     type: 'enum',
@@ -45,14 +48,14 @@ export class UserAction {
   @Column({ type: 'uuid', nullable: true })
   store_id?: string;
 
-  @ManyToOne(() => Store, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Store, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'store_id' })
   store?: Store;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   product_id?: string;
 
-  @ManyToOne(() => Product, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Product, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'product_id' })
   product?: Product;
 
