@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, SelectQueryBuilder } from 'typeorm';
 import { UserAction, ActionType } from '../model/user-actions.model';
 import {
   CreateUserActionDto,
@@ -367,62 +367,181 @@ export class UserActionService {
    * Get actions for a specific store
    * @param storeId - The ID of the store
    * @param query - Query parameters
-   * @returns Array of user actions for the store
+   * @returns Optimized analytics response with summary, breakdown, and recent actions
    */
   async getStoreActions(
     storeId: string,
     query: GetUserActionsQueryDto
   ): Promise<{
-    data: UserAction[];
+    summary: any;
+    breakdown: any;
+    recentActions: UserAction[];
     total: number;
     page: number;
     pageSize: number;
     totalPages: number;
   }> {
-    this.logger.log(`Fetching actions for store: ${storeId}`);
+    this.logger.log(`Fetching analytics for store: ${storeId}`);
 
     const {
-      action_type,
       start_date,
       end_date,
-      limit = '10',
+      limit = '7',
       page = '1',
+      search_type,
+      search_value,
     } = query;
 
-    // Convert page to offset: page 1 = offset 0, page 2 = offset 10, etc.
     const pageNum = Math.max(1, parseInt(page, 10));
     const pageSize = parseInt(limit, 10);
     const offset = (pageNum - 1) * pageSize;
 
-    const whereClause: Record<string, any> = { store_id: storeId };
-
-    if (action_type) {
-      whereClause.action_type = action_type;
-    }
-
-    if (start_date && end_date) {
-      whereClause.created_at = Between(
-        new Date(start_date),
-        new Date(end_date)
-      );
-    }
-
     try {
-      const [data, total] = await this.userActionRepository.findAndCount({
-        where: whereClause,
-        order: { created_at: 'DESC' },
-        take: pageSize,
-        skip: offset,
-        relations: ['user', 'product', 'store'],
+      // Build base query with filters
+      let baseQueryBuilder = this.userActionRepository
+        .createQueryBuilder('action')
+        .where('action.store_id = :storeId', { storeId });
+
+      // Apply date range filter
+      if (start_date && end_date) {
+        baseQueryBuilder = baseQueryBuilder.andWhere(
+          'action.created_at BETWEEN :start_date AND :end_date',
+          {
+            start_date: new Date(start_date),
+            end_date: new Date(end_date),
+          }
+        );
+      }
+
+      // Helper function to apply search filters
+      const applySearchFilters = (
+        qb: SelectQueryBuilder<UserAction>
+      ): SelectQueryBuilder<UserAction> => {
+        if (search_type && search_value) {
+          const searchVal: string = search_value.toLowerCase();
+          switch (search_type) {
+            case 'product_name':
+              qb.leftJoin('action.product', 'product')
+                .andWhere('product.product_name IS NOT NULL')
+                .andWhere('LOWER(product.product_name) LIKE :searchValue', {
+                  searchValue: `%${searchVal}%`,
+                });
+              break;
+            case 'product_id':
+              qb.andWhere('action.product_id IS NOT NULL').andWhere(
+                'LOWER(action.product_id) LIKE :searchValue',
+                {
+                  searchValue: `%${searchVal}%`,
+                }
+              );
+              break;
+            case 'user_email':
+              qb.leftJoin('action.user', 'user')
+                .andWhere('user.email IS NOT NULL')
+                .andWhere('LOWER(user.email) LIKE :searchValue', {
+                  searchValue: `%${searchVal}%`,
+                });
+              break;
+            case 'user_name':
+              qb.leftJoin('action.user', 'user')
+                .andWhere('user.name IS NOT NULL')
+                .andWhere('LOWER(user.name) LIKE :searchValue', {
+                  searchValue: `%${searchVal}%`,
+                });
+              break;
+            case 'user_phone':
+              qb.leftJoin('action.user', 'user')
+                .andWhere('user.phone IS NOT NULL')
+                .andWhere('user.phone LIKE :searchValue', {
+                  searchValue: `%${search_value}%`,
+                });
+              break;
+          }
+        }
+        return qb;
+      };
+
+      // Clone base query for stats
+      let statsQuery = this.userActionRepository
+        .createQueryBuilder('action')
+        .where('action.store_id = :storeId', { storeId });
+
+      if (start_date && end_date) {
+        statsQuery = statsQuery.andWhere(
+          'action.created_at BETWEEN :start_date AND :end_date',
+          {
+            start_date: new Date(start_date),
+            end_date: new Date(end_date),
+          }
+        );
+      }
+      statsQuery = applySearchFilters(statsQuery);
+
+      // Get action breakdown
+      const breakdown = await statsQuery
+        .select('action.action_type', 'action_type')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('action.action_type')
+        .getRawMany();
+
+      // Calculate summary stats
+      const breakdownMap: Record<string, number> = {};
+      let totalActions = 0;
+      breakdown.forEach((item: { action_type: string; count: string }) => {
+        const count = parseInt(item.count, 10);
+        breakdownMap[item.action_type] = count;
+        totalActions += count;
       });
+
+      const summary = {
+        total_actions: totalActions,
+        product_views: breakdownMap['product_view'] || 0,
+        favorites: breakdownMap['product_favorite'] || 0,
+        contacts:
+          (breakdownMap['whatsapp_click'] || 0) +
+          (breakdownMap['phone_click'] || 0),
+      };
+
+      const actionBreakdown = {
+        store_visit: breakdownMap['store_visit'] || 0,
+        product_view: breakdownMap['product_view'] || 0,
+        product_favorite: breakdownMap['product_favorite'] || 0,
+        product_unfavorite: breakdownMap['product_unfavorite'] || 0,
+        whatsapp_click: breakdownMap['whatsapp_click'] || 0,
+        phone_click: breakdownMap['phone_click'] || 0,
+        map_open: breakdownMap['map_open'] || 0,
+        search: breakdownMap['search'] || 0,
+        branch_visit: breakdownMap['branch_visit'] || 0,
+      };
+
+      // Get recent actions (paginated)
+      let recentActionsQuery = baseQueryBuilder
+        .leftJoinAndSelect('action.user', 'user')
+        .leftJoinAndSelect('action.product', 'product')
+        .orderBy('action.created_at', 'DESC');
+
+      recentActionsQuery = applySearchFilters(recentActionsQuery);
+
+      const [recentActions, total] = await recentActionsQuery
+        .take(pageSize)
+        .skip(offset)
+        .getManyAndCount();
 
       const totalPages = Math.ceil(total / pageSize);
 
-      return { data, total, page: pageNum, pageSize, totalPages };
+      return {
+        summary,
+        breakdown: actionBreakdown,
+        recentActions,
+        total,
+        page: pageNum,
+        pageSize,
+        totalPages,
+      };
     } catch (error) {
-      this.logger.error(`Failed to fetch store actions: ${error}`);
+      this.logger.error(`Failed to fetch store analytics: ${error}`);
       throw new HttpException(
-        'Failed to fetch store actions',
+        'Failed to fetch store analytics',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
