@@ -397,25 +397,7 @@ export class UserActionService {
     const offset = (pageNum - 1) * pageSize;
 
     try {
-      // Helper function to create base filters (where + date range)
-      const createBaseQuery = (): SelectQueryBuilder<UserAction> => {
-        let qb = this.userActionRepository
-          .createQueryBuilder('action')
-          .where('action.store_id = :storeId', { storeId });
-
-        if (start_date && end_date) {
-          qb = qb.andWhere(
-            'action.created_at BETWEEN :start_date AND :end_date',
-            {
-              start_date: new Date(start_date),
-              end_date: new Date(end_date),
-            }
-          );
-        }
-        return qb;
-      };
-
-      // Helper function to apply search filters with joins (for count/stats queries)
+      // Helper function to apply search filters with joins for queries without joins
       const applySearchFiltersWithJoins = (
         qb: SelectQueryBuilder<UserAction>
       ): SelectQueryBuilder<UserAction> => {
@@ -467,55 +449,73 @@ export class UserActionService {
         return qb;
       };
 
-      // Helper function to apply search WHERE conditions only (assumes joins already exist)
-      const applySearchFiltersWheresOnly = (
+      // Helper function to apply search filters without joins (assumes joins already exist)
+      const applySearchFiltersNoJoin = (
         qb: SelectQueryBuilder<UserAction>
       ): SelectQueryBuilder<UserAction> => {
         if (search_type && search_value) {
           const searchVal: string = search_value.toLowerCase();
           switch (search_type) {
             case 'product_name':
-              qb = qb
-                .andWhere('product.product_name IS NOT NULL')
-                .andWhere('LOWER(product.product_name) LIKE :searchValue', {
+              qb.andWhere('product.product_name IS NOT NULL').andWhere(
+                'LOWER(product.product_name) LIKE :searchValue',
+                {
                   searchValue: `%${searchVal}%`,
-                });
+                }
+              );
               break;
             case 'product_id':
-              qb = qb
-                .andWhere('action.product_id IS NOT NULL')
-                .andWhere('LOWER(action.product_id) LIKE :searchValue', {
+              qb.andWhere('action.product_id IS NOT NULL').andWhere(
+                'LOWER(action.product_id) LIKE :searchValue',
+                {
                   searchValue: `%${searchVal}%`,
-                });
+                }
+              );
               break;
             case 'user_email':
-              qb = qb
-                .andWhere('user.email IS NOT NULL')
-                .andWhere('LOWER(user.email) LIKE :searchValue', {
+              qb.andWhere('user.email IS NOT NULL').andWhere(
+                'LOWER(user.email) LIKE :searchValue',
+                {
                   searchValue: `%${searchVal}%`,
-                });
+                }
+              );
               break;
             case 'user_name':
-              qb = qb
-                .andWhere('user.name IS NOT NULL')
-                .andWhere('LOWER(user.name) LIKE :searchValue', {
+              qb.andWhere('user.name IS NOT NULL').andWhere(
+                'LOWER(user.name) LIKE :searchValue',
+                {
                   searchValue: `%${searchVal}%`,
-                });
+                }
+              );
               break;
             case 'user_phone':
-              qb = qb
-                .andWhere('user.phone IS NOT NULL')
-                .andWhere('user.phone LIKE :searchValue', {
+              qb.andWhere('user.phone IS NOT NULL').andWhere(
+                'user.phone LIKE :searchValue',
+                {
                   searchValue: `%${search_value}%`,
-                });
+                }
+              );
               break;
           }
         }
         return qb;
       };
 
-      // Get stats with fresh query builder
-      const statsQuery = applySearchFiltersWithJoins(createBaseQuery());
+      // Clone base query for stats
+      let statsQuery = this.userActionRepository
+        .createQueryBuilder('action')
+        .where('action.store_id = :storeId', { storeId });
+
+      if (start_date && end_date) {
+        statsQuery = statsQuery.andWhere(
+          'action.created_at BETWEEN :start_date AND :end_date',
+          {
+            start_date: new Date(start_date),
+            end_date: new Date(end_date),
+          }
+        );
+      }
+      statsQuery = applySearchFiltersWithJoins(statsQuery);
 
       // Get action breakdown
       const breakdown = await statsQuery
@@ -554,13 +554,30 @@ export class UserActionService {
         branch_visit: breakdownMap['branch_visit'] || 0,
       };
 
-      // Get recent actions (paginated) with fresh query builder
-      const recentActionsQuery = applySearchFiltersWheresOnly(
-        createBaseQuery()
-          .leftJoinAndSelect('action.user', 'user')
-          .leftJoinAndSelect('action.product', 'product')
-          .orderBy('action.created_at', 'DESC')
-      );
+      // Get recent actions (paginated) - create fresh query
+      let recentActionsQuery = this.userActionRepository
+        .createQueryBuilder('action')
+        .where('action.store_id = :storeId', { storeId })
+        .leftJoinAndSelect('user', 'user', 'action.user_id = user.id')
+        .leftJoinAndSelect(
+          'product',
+          'product',
+          'action.product_id = product.product_code'
+        )
+        .orderBy('action.created_at', 'DESC');
+
+      // Apply date range filter
+      if (start_date && end_date) {
+        recentActionsQuery = recentActionsQuery.andWhere(
+          'action.created_at BETWEEN :start_date AND :end_date',
+          {
+            start_date: new Date(start_date),
+            end_date: new Date(end_date),
+          }
+        );
+      }
+
+      recentActionsQuery = applySearchFiltersNoJoin(recentActionsQuery);
 
       const [recentActions, total] = await recentActionsQuery
         .take(pageSize)
