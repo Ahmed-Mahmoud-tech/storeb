@@ -365,7 +365,7 @@ export class StoreService {
           await favoriteRepo.query('DELETE FROM favorite WHERE product = $1', [
             pb.product_code,
           ]);
-          
+
           // Then delete the product-branch relationships
           await this.productBranchRepository.delete({
             product_code: pb.product_code,
