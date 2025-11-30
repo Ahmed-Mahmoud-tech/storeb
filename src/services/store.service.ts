@@ -30,7 +30,6 @@ export class StoreService {
       banner,
       themeColor,
       hasDelivery,
-      storeTypes,
       branches,
       ownerId,
       phoneNumber,
@@ -43,7 +42,6 @@ export class StoreService {
     store.banner = banner || null;
     store.theme_color = themeColor;
     store.delivery = hasDelivery;
-    store.type = storeTypes; // Using the entire storeTypes array
     store.owner_id = ownerId;
 
     const existingStore = await this.storeRepository.findOne({
@@ -227,11 +225,6 @@ export class StoreService {
     if (updateData.hasDelivery !== undefined) {
       store.delivery = updateData.hasDelivery;
     }
-
-    if (updateData.storeTypes && updateData.storeTypes.length > 0) {
-      store.type = updateData.storeTypes;
-    }
-
     // Save updated store to database
     await this.storeRepository.save(store);
 

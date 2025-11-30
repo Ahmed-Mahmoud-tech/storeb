@@ -9,13 +9,6 @@ import {
 import { Type } from 'class-transformer';
 import { CreateBranchDto } from './branch.dto';
 
-export enum StoreType {
-  MEN = 'men',
-  WOMEN = 'women',
-  CHILDREN = 'children',
-  SHOES = 'shoes',
-}
-
 export class CreateStoreDto {
   @IsUUID('4')
   @IsOptional()
@@ -45,9 +38,6 @@ export class CreateStoreDto {
   @IsOptional()
   @IsBoolean()
   hasDelivery?: boolean;
-  @IsArray()
-  @IsString({ each: true })
-  storeTypes!: string[];
 
   @IsOptional()
   @IsArray()

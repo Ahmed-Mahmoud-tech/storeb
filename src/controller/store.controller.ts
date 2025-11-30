@@ -70,12 +70,6 @@ export class StoreController implements OnModuleInit {
       createStoreDto.banner = dto.banner as string;
       createStoreDto.themeColor = dto.themeColor as string;
       createStoreDto.phoneNumber = dto.phoneNumber as string;
-
-      // Complex properties that need parsing
-      createStoreDto.storeTypes = FormDataHelper.parseIfJSON<string[]>(
-        dto.storeTypes,
-        []
-      );
       createStoreDto.hasDelivery = FormDataHelper.parseBoolean(dto.hasDelivery);
       createStoreDto.branches = FormDataHelper.parseIfJSON<CreateBranchDto[]>(
         dto.branches,
@@ -320,13 +314,6 @@ export class StoreController implements OnModuleInit {
       if (dto.hasDelivery !== undefined) {
         updateStoreDto.hasDelivery = FormDataHelper.parseBoolean(
           dto.hasDelivery
-        );
-      }
-
-      if (dto.storeTypes) {
-        updateStoreDto.storeTypes = FormDataHelper.parseIfJSON<string[]>(
-          dto.storeTypes,
-          []
         );
       }
 

@@ -17,9 +17,6 @@ export class FormDataParserInterceptor implements NestInterceptor {
 
     if (request.body && typeof request.body === 'object') {
       const body = request.body as Record<string, unknown>;
-
-      // Parse top-level JSON string fields
-      this.parseJsonField(body, 'storeTypes');
       this.parseJsonField(body, 'branches');
 
       // Process nested objects within branches if they exist
