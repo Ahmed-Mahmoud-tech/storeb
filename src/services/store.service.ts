@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Store } from '../model/store.model';
 import { Branch } from '../model/branches.model';
+import { Product } from '../model/product.model';
+import { ProductBranch } from '../model/product_branches.model';
 import { CreateStoreDto } from '../dto/store.dto';
 import { CreateBranchDto } from '../dto/branch.dto';
 import { FileUploadService } from './file-upload.service';
@@ -18,6 +20,10 @@ export class StoreService {
     private storeRepository: Repository<Store>,
     @InjectRepository(Branch)
     private branchRepository: Repository<Branch>,
+    @InjectRepository(Product)
+    private productRepository: Repository<Product>,
+    @InjectRepository(ProductBranch)
+    private productBranchRepository: Repository<ProductBranch>,
     private fileUploadService: FileUploadService,
     private userActionService: UserActionService
   ) {}
@@ -336,10 +342,61 @@ export class StoreService {
   // DELETE operations for Branch
   async deleteBranch(id: string): Promise<void> {
     // First check if branch exists - validates that it exists
-    await this.findBranchById(id);
+    const branch = await this.findBranchById(id);
+
+    // Find all products associated with this branch
+    const productBranches = await this.productBranchRepository.find({
+      where: { branch_id: id },
+    });
+
+    // For each product associated with this branch
+    for (const pb of productBranches) {
+      // Check if this product exists in other branches
+      // Get total count of branches for this product
+      const totalBranchCount = await this.productBranchRepository.count({
+        where: { product_code: pb.product_code },
+      });
+
+      // If the product only exists in this branch, delete it
+      if (totalBranchCount === 1) {
+        try {
+          // First delete any favorites referencing this product
+          const favoriteRepo = this.productRepository.manager;
+          await favoriteRepo.query('DELETE FROM favorite WHERE product = $1', [
+            pb.product_code,
+          ]);
+          
+          // Then delete the product-branch relationships
+          await this.productBranchRepository.delete({
+            product_code: pb.product_code,
+          });
+
+          // Finally delete the product
+          const product = await this.productRepository.findOne({
+            where: { product_code: pb.product_code },
+          });
+          if (product) {
+            await this.productRepository.remove(product);
+            this.logger.log(
+              `Product ${pb.product_code} deleted (no other branches have it)`
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error deleting product ${pb.product_code}:`,
+            error
+          );
+          // Continue with branch deletion even if product deletion fails
+        }
+      }
+    }
+
+    // Delete the product-branch relationship for this branch
+    await this.productBranchRepository.delete({ branch_id: id });
 
     // Delete the branch
     await this.branchRepository.delete(id);
+    this.logger.log(`Branch ${id} (${branch.name}) deleted successfully`);
   }
   /**
    * Update branches for a store - handles creating, updating, and removing branches
