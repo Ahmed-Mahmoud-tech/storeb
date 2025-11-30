@@ -14,7 +14,8 @@ export class FormDataHelper {
       }
     }
 
-    return (input as T) || defaultValue;
+    // Return input if it's defined (including empty arrays/objects), otherwise return defaultValue
+    return input !== undefined && input !== null ? (input as T) : defaultValue;
   }
 
   /**

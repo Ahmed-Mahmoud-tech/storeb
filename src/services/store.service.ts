@@ -3,6 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Store } from '../model/store.model';
 import { Branch } from '../model/branches.model';
+import { ProductBranch } from '../model/product_branches.model';
+import { EmployeeBranch } from '../model/employee_branches.model';
+import { CustomerProduct } from '../model/customer_products.model';
 import { CreateStoreDto } from '../dto/store.dto';
 import { CreateBranchDto } from '../dto/branch.dto';
 import { FileUploadService } from './file-upload.service';
@@ -18,6 +21,12 @@ export class StoreService {
     private storeRepository: Repository<Store>,
     @InjectRepository(Branch)
     private branchRepository: Repository<Branch>,
+    @InjectRepository(ProductBranch)
+    private productBranchRepository: Repository<ProductBranch>,
+    @InjectRepository(EmployeeBranch)
+    private employeeBranchRepository: Repository<EmployeeBranch>,
+    @InjectRepository(CustomerProduct)
+    private customerProductRepository: Repository<CustomerProduct>,
     private fileUploadService: FileUploadService,
     private userActionService: UserActionService
   ) {}
@@ -123,8 +132,9 @@ export class StoreService {
   async findStoreByName(
     name: string
   ): Promise<Store & { branches?: Branch[]; owner?: any }> {
-    let store = await this.storeRepository.findOne({ where: { name } });
-
+    let store = await this.storeRepository.findOne({
+      where: { name },
+    });
     // If not found, try replacing underscores with spaces (for URL-safe names)
     if (!store && name.includes('_')) {
       const nameWithSpaces = name.replace(/_/g, ' ');
@@ -238,8 +248,8 @@ export class StoreService {
         .execute();
     }
 
-    // Update branches if provided
-    if (updateData.branches && updateData.branches.length > 0) {
+    // Update branches if provided (including empty array to delete all branches)
+    if (updateData.branches !== undefined) {
       await this.updateBranchesForStore(id, updateData.branches);
     } // Get updated store with branches
     return this.findStoreById(id);
@@ -337,6 +347,16 @@ export class StoreService {
   async deleteBranch(id: string): Promise<void> {
     // First check if branch exists - validates that it exists
     await this.findBranchById(id);
+
+    // Delete related records from junction tables and other tables first
+    // Delete from product_branches
+    await this.productBranchRepository.delete({ branch_id: id });
+
+    // Delete from employee_branches
+    await this.employeeBranchRepository.delete({ branch_id: id });
+
+    // Delete from customer_products
+    await this.customerProductRepository.delete({ branch_id: id });
 
     // Delete the branch
     await this.branchRepository.delete(id);
@@ -627,7 +647,7 @@ export class StoreService {
         banner: store.banner,
         theme_color: store.theme_color,
         delivery: store.delivery,
-        type: store.type,
+        // type: store.type,
       },
       categories: categories,
     };

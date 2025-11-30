@@ -317,8 +317,8 @@ export class StoreController implements OnModuleInit {
         );
       }
 
-      // Process branches if provided
-      if (dto.branches) {
+      // Process branches if provided (including empty array to delete all branches)
+      if (dto.branches !== undefined) {
         updateStoreDto.branches = FormDataHelper.parseIfJSON<CreateBranchDto[]>(
           dto.branches,
           []
