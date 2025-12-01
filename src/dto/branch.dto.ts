@@ -48,4 +48,8 @@ export class CreateBranchDto {
   @ValidateNested({ each: true })
   @Type(() => SupportNumberDto)
   supportNumbers: SupportNumberDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  is_online?: boolean;
 }

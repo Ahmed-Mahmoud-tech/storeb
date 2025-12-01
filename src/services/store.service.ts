@@ -94,6 +94,7 @@ export class StoreService {
     branch.address = branchDto.coordinates.address;
     branch.lat = branchDto.coordinates.lat.toString();
     branch.lang = branchDto.coordinates.lng.toString();
+    branch.is_online = branchDto.is_online ?? true; // Default to true if not specified
 
     // Handle support numbers
     if (branchDto.supportNumbers && branchDto.supportNumbers.length > 0) {
@@ -333,6 +334,9 @@ export class StoreService {
         (support) =>
           `${support.phone}:${support.whatsapp ? 'whatsapp' : 'phone'}`
       );
+    }
+    if (updateData.is_online !== undefined) {
+      branch.is_online = updateData.is_online;
     }
 
     // Save updated branch to database

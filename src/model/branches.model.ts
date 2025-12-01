@@ -32,6 +32,9 @@ export class Branch {
   @Column({ type: 'varchar', length: 50, nullable: true })
   lang?: string;
 
+  @Column({ type: 'boolean', default: true })
+  is_online!: boolean;
+
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   created_at!: Date;
   @UpdateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
