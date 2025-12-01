@@ -23,8 +23,12 @@ export class Branch {
   @Column({ type: 'varchar', length: 255, nullable: false })
   address!: string;
 
-  @Column('text', { array: true, nullable: true })
-  customer_support?: string[];
+  @Column('jsonb', { nullable: true })
+  customer_support?: Array<{
+    country_code: string;
+    phone: string;
+    type: 'whatsapp' | 'phone';
+  }>;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   lat?: string;

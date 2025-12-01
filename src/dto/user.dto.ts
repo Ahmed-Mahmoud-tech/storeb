@@ -51,6 +51,10 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
+  country_code?: string;
+
+  @IsOptional()
+  @IsString()
   phone?: string;
 
   @IsOptional()

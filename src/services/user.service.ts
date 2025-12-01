@@ -23,6 +23,69 @@ export class UserService {
   ) {}
 
   /**
+   * Parse phone number into country code and phone number
+   * @param phoneNumber Full phone number (with or without country code)
+   * @returns Object with countryCode and phone properties
+   */
+  private parsePhoneNumber(phoneNumber: string): {
+    countryCode: string;
+    phone: string;
+  } {
+    if (!phoneNumber) {
+      return { countryCode: '+20', phone: '' };
+    }
+
+    // If it doesn't start with +, assume it's just the phone number
+    if (!phoneNumber.startsWith('+')) {
+      return { countryCode: '+20', phone: phoneNumber };
+    }
+
+    // Common country code lengths (most are 1-3 digits)
+    const countryCodePatterns = [
+      { pattern: /^\+1(?!\d{11})/, code: '+1' },
+      { pattern: /^\+44/, code: '+44' },
+      { pattern: /^\+212/, code: '+212' },
+      { pattern: /^\+213/, code: '+213' },
+      { pattern: /^\+216/, code: '+216' },
+      { pattern: /^\+218/, code: '+218' },
+      { pattern: /^\+20/, code: '+20' },
+      { pattern: /^\+961/, code: '+961' },
+      { pattern: /^\+962/, code: '+962' },
+      { pattern: /^\+963/, code: '+963' },
+      { pattern: /^\+964/, code: '+964' },
+      { pattern: /^\+965/, code: '+965' },
+      { pattern: /^\+966/, code: '+966' },
+      { pattern: /^\+968/, code: '+968' },
+      { pattern: /^\+970/, code: '+970' },
+      { pattern: /^\+971/, code: '+971' },
+      { pattern: /^\+973/, code: '+973' },
+      { pattern: /^\+974/, code: '+974' },
+    ];
+
+    // Try to match against known patterns
+    for (const { pattern, code } of countryCodePatterns) {
+      if (pattern.test(phoneNumber)) {
+        return {
+          countryCode: code,
+          phone: phoneNumber.substring(code.length),
+        };
+      }
+    }
+
+    // Fallback: assume 2-3 digit country code
+    const match = phoneNumber.match(/^\+(\d{1,3})(.+)$/);
+    if (match) {
+      return {
+        countryCode: '+' + match[1],
+        phone: match[2],
+      };
+    }
+
+    // Default fallback
+    return { countryCode: '+20', phone: phoneNumber.substring(1) };
+  }
+
+  /**
    * Registers a new user.
    * @param createUserDto - The data transfer object containing user registration details.
    * @returns A promise that resolves to a success message.
@@ -113,9 +176,27 @@ export class UserService {
       if (updateUserDto.name) {
         user.name = updateUserDto.name;
       }
+      
+      // Handle phone update
       if (updateUserDto.phone) {
-        user.phone = updateUserDto.phone;
+        // If country_code is also provided, use phone as-is (they're separated)
+        if (updateUserDto.country_code) {
+          user.phone = updateUserDto.phone;
+        } else {
+          // If only phone is provided, parse it to extract country code
+          const { countryCode, phone } = this.parsePhoneNumber(
+            updateUserDto.phone
+          );
+          user.phone = phone;
+          user.country_code = countryCode;
+        }
       }
+      
+      // Handle country_code update - this overrides any parsed country_code above
+      if (updateUserDto.country_code) {
+        user.country_code = updateUserDto.country_code;
+      }
+      
       if (updateUserDto.type) {
         user.type = updateUserDto.type;
       }

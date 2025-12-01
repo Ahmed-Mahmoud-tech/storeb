@@ -21,6 +21,10 @@ export class CoordinatesDto {
 }
 
 export class SupportNumberDto {
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
   @IsString()
   phone: string;
 

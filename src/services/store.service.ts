@@ -28,6 +28,69 @@ export class StoreService {
     private userActionService: UserActionService
   ) {}
 
+  /**
+   * Parse phone number into country code and phone number
+   * @param phoneNumber Full phone number (with or without country code)
+   * @returns Object with countryCode and phone properties
+   */
+  private parsePhoneNumber(phoneNumber: string): {
+    countryCode: string;
+    phone: string;
+  } {
+    if (!phoneNumber) {
+      return { countryCode: '+20', phone: '' };
+    }
+
+    // If it doesn't start with +, assume it's just the phone number
+    if (!phoneNumber.startsWith('+')) {
+      return { countryCode: '+20', phone: phoneNumber };
+    }
+
+    // Common country code lengths (most are 1-3 digits)
+    const countryCodePatterns = [
+      { pattern: /^\+1(?!\d{11})/, code: '+1' }, // +1 for USA/Canada but not for +1 followed by 11 more digits
+      { pattern: /^\+44/, code: '+44' }, // UK
+      { pattern: /^\+212/, code: '+212' }, // Morocco
+      { pattern: /^\+213/, code: '+213' }, // Algeria
+      { pattern: /^\+216/, code: '+216' }, // Tunisia
+      { pattern: /^\+218/, code: '+218' }, // Libya
+      { pattern: /^\+20/, code: '+20' }, // Egypt
+      { pattern: /^\+961/, code: '+961' }, // Lebanon
+      { pattern: /^\+962/, code: '+962' }, // Jordan
+      { pattern: /^\+963/, code: '+963' }, // Syria
+      { pattern: /^\+964/, code: '+964' }, // Iraq
+      { pattern: /^\+965/, code: '+965' }, // Kuwait
+      { pattern: /^\+966/, code: '+966' }, // Saudi Arabia
+      { pattern: /^\+968/, code: '+968' }, // Oman
+      { pattern: /^\+970/, code: '+970' }, // Palestine
+      { pattern: /^\+971/, code: '+971' }, // UAE
+      { pattern: /^\+973/, code: '+973' }, // Bahrain
+      { pattern: /^\+974/, code: '+974' }, // Qatar
+    ];
+
+    // Try to match against known patterns
+    for (const { pattern, code } of countryCodePatterns) {
+      if (pattern.test(phoneNumber)) {
+        return {
+          countryCode: code,
+          phone: phoneNumber.substring(code.length),
+        };
+      }
+    }
+
+    // Fallback: assume 2-3 digit country code
+    const match = phoneNumber.match(/^\+(\d{1,3})(.+)$/);
+    if (match) {
+      return {
+        countryCode: '+' + match[1],
+        phone: match[2],
+      };
+    }
+
+    // Default fallback
+    return { countryCode: '+20', phone: phoneNumber.substring(1) };
+  }
+
   async createStore(createStoreDto: CreateStoreDto): Promise<Store> {
     this.logger.log(`Creating store: ${createStoreDto.storeName}`);
     const {
@@ -58,12 +121,13 @@ export class StoreService {
     }
     // Save store to database
     const savedStore = await this.storeRepository.save(store);
-    // Save phoneNumber to user with id ownerId
+    // Save phoneNumber to user with id ownerId - parse country code and phone separately
     if (phoneNumber) {
+      const { countryCode, phone } = this.parsePhoneNumber(phoneNumber);
       await this.storeRepository.manager
         .createQueryBuilder()
         .update('user')
-        .set({ phone: phoneNumber, type: 'owner' })
+        .set({ phone: phone, country_code: countryCode, type: 'owner' })
         .where('id = :ownerId', { ownerId })
         .execute();
     }
@@ -87,27 +151,49 @@ export class StoreService {
     storeId: string,
     branchDto: CreateBranchDto
   ): Promise<Branch> {
-    // Create branch entity
-    const branch = new Branch();
-    branch.store_id = storeId;
-    branch.name = branchDto.name;
-    branch.address = branchDto.coordinates.address;
-    branch.lat = branchDto.coordinates.lat.toString();
-    branch.lang = branchDto.coordinates.lng.toString();
-    branch.is_online = branchDto.is_online ?? true; // Default to true if not specified
+    try {
+      // Handle support numbers - parse country code and phone separately
+      let customerSupportData = null;
+      if (branchDto.supportNumbers && branchDto.supportNumbers.length > 0) {
+        customerSupportData = branchDto.supportNumbers.map((support) => {
+          const countryCode = support.countryCode || '+20';
+          const phoneNumber = support.phone || '';
+          return {
+            country_code: countryCode,
+            phone: phoneNumber,
+            type: support.whatsapp ? 'whatsapp' : 'phone',
+          };
+        });
+      }
 
-    // Handle support numbers
-    if (branchDto.supportNumbers && branchDto.supportNumbers.length > 0) {
-      branch.customer_support = branchDto.supportNumbers.map(
-        (support) =>
-          `${support.phone}:${support.whatsapp ? 'whatsapp' : 'phone'}`
+      // Use raw SQL for proper JSONB handling
+      const { v4: uuid } = require('uuid');
+      const id = uuid();
+      const jsonPayload = customerSupportData ? JSON.stringify(customerSupportData) : null;
+      
+      this.logger.debug(`Creating branch ${id} with JSONB payload: ${jsonPayload}`);
+      
+      const result = await this.branchRepository.query(
+        `INSERT INTO branches (id, store_id, name, address, lat, lang, is_online, customer_support, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW(), NOW())
+         RETURNING *`,
+        [
+          id,
+          storeId,
+          branchDto.name,
+          branchDto.coordinates.address,
+          branchDto.coordinates.lat.toString(),
+          branchDto.coordinates.lng.toString(),
+          branchDto.is_online ?? true,
+          jsonPayload
+        ]
       );
+
+      return result[0] as Branch;
+    } catch (error) {
+      this.logger.error(`Error creating branch for store ${storeId}:`, error);
+      throw error;
     }
-
-    // Save branch to database
-    const savedBranch = await this.branchRepository.save(branch);
-
-    return savedBranch;
   }
 
   // READ operations for Store
@@ -235,12 +321,15 @@ export class StoreService {
     // Save updated store to database
     await this.storeRepository.save(store);
 
-    // Update phone number if provided
+    // Update phone number if provided - parse country code and phone separately
     if (updateData.phoneNumber) {
+      const { countryCode, phone } = this.parsePhoneNumber(
+        updateData.phoneNumber
+      );
       await this.storeRepository.manager
         .createQueryBuilder()
         .update('user')
-        .set({ phone: updateData.phoneNumber })
+        .set({ phone: phone, country_code: countryCode })
         .where('id = :ownerId', { ownerId: store.owner_id })
         .execute();
     }
@@ -308,39 +397,91 @@ export class StoreService {
     id: string,
     updateData: Partial<CreateBranchDto>
   ): Promise<Branch> {
-    // First check if branch exists
-    const branch = await this.findBranchById(id);
+    try {
+      // First check if branch exists
+      const branch = await this.findBranchById(id);
 
-    // Update branch properties
-    if (updateData.name) {
-      branch.name = updateData.name;
-    }
+      // Build update object for non-JSONB fields
+      const updateFields: any = {};
 
-    if (updateData.coordinates) {
-      if (updateData.coordinates.address) {
-        branch.address = updateData.coordinates.address;
+      if (updateData.name) {
+        updateFields.name = updateData.name;
       }
 
-      if (updateData.coordinates.lat) {
-        branch.lat = updateData.coordinates.lat.toString();
+      if (updateData.coordinates) {
+        if (updateData.coordinates.address) {
+          updateFields.address = updateData.coordinates.address;
+        }
+        if (updateData.coordinates.lat) {
+          updateFields.lat = updateData.coordinates.lat.toString();
+        }
+        if (updateData.coordinates.lng) {
+          updateFields.lang = updateData.coordinates.lng.toString();
+        }
       }
 
-      if (updateData.coordinates.lng) {
-        branch.lang = updateData.coordinates.lng.toString();
+      if (updateData.is_online !== undefined) {
+        updateFields.is_online = updateData.is_online;
       }
-    }
-    if (updateData.supportNumbers && updateData.supportNumbers.length > 0) {
-      branch.customer_support = updateData.supportNumbers.map(
-        (support) =>
-          `${support.phone}:${support.whatsapp ? 'whatsapp' : 'phone'}`
-      );
-    }
-    if (updateData.is_online !== undefined) {
-      branch.is_online = updateData.is_online;
-    }
 
-    // Save updated branch to database
-    return this.branchRepository.save(branch);
+      // Handle support numbers separately with proper JSONB casting
+      if (updateData.supportNumbers && updateData.supportNumbers.length > 0) {
+        let supportArray = updateData.supportNumbers;
+        
+        // Check if supportNumbers is already a string (shouldn't be, but handle it)
+        if (typeof supportArray === 'string') {
+          try {
+            supportArray = JSON.parse(supportArray);
+          } catch (e) {
+            this.logger.warn(`Could not parse supportNumbers as JSON: ${supportArray}`);
+          }
+        }
+
+        // Map to proper format
+        const mappedArray = (supportArray as any[]).map((support: any) => {
+          const countryCode = support.countryCode || '+20';
+          const phoneNumber = support.phone || '';
+          return {
+            country_code: countryCode,
+            phone: phoneNumber,
+            type: support.whatsapp ? 'whatsapp' : 'phone',
+          };
+        });
+
+        // Update regular fields first if any exist
+        if (Object.keys(updateFields).length > 0) {
+          await this.branchRepository
+            .createQueryBuilder()
+            .update(Branch)
+            .set(updateFields)
+            .where('id = :id', { id })
+            .execute();
+        }
+
+        // Update JSONB separately with proper type casting
+        const jsonString = JSON.stringify(mappedArray);
+        this.logger.debug(`Updating branch ${id} with JSONB: ${jsonString}`);
+        
+        await this.branchRepository.query(
+          `UPDATE branches SET customer_support = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+          [jsonString, id]
+        );
+      } else if (Object.keys(updateFields).length > 0) {
+        // Update only non-JSONB fields
+        await this.branchRepository
+          .createQueryBuilder()
+          .update(Branch)
+          .set(updateFields)
+          .where('id = :id', { id })
+          .execute();
+      }
+
+      // Return updated branch
+      return this.findBranchById(id);
+    } catch (error) {
+      this.logger.error(`Error updating branch ${id}:`, error);
+      throw error;
+    }
   }
 
   // DELETE operations for Branch
