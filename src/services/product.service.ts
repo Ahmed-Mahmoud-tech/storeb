@@ -476,9 +476,42 @@ export class ProductService {
       product.tags = currentTags;
     }
 
-    // Update images
-    if (updateProductDto.images) {
-      product.images = updateProductDto.images;
+    // Update images - delete old images that are being removed
+    if (updateProductDto.images !== undefined) {
+      const oldImages = product.images || [];
+      const newImages = updateProductDto.images || [];
+
+      // Find images that are being removed (in old but not in new)
+      const imagesToDelete = oldImages.filter(
+        (image) => !newImages.includes(image)
+      );
+
+      // Delete removed images from file system
+      if (imagesToDelete.length > 0) {
+        this.logger.log(
+          `Deleting ${imagesToDelete.length} images for product ${product_code}`
+        );
+        this.logger.log(`Images to delete:`, imagesToDelete);
+
+        for (const imagePath of imagesToDelete) {
+          try {
+            this.logger.log(`Processing image deletion: ${imagePath}`);
+            const deletionResult = this.fileUploadService.deleteFile(imagePath);
+            if (deletionResult) {
+              this.logger.log(`✓ Successfully deleted image: ${imagePath}`);
+            } else {
+              this.logger.warn(`✗ Could not delete image: ${imagePath}`);
+            }
+          } catch (error) {
+            this.logger.error(`✗ Error deleting image ${imagePath}:`, error);
+            // Continue with update even if image deletion fails
+          }
+        }
+      } else {
+        this.logger.log(`No images to delete for product ${product_code}`);
+      }
+
+      product.images = newImages;
     }
 
     // Update updated_by
@@ -504,6 +537,31 @@ export class ProductService {
     const product = await this.findOne(product_code);
     this.logger.log(`Removing product: ${product_code}`, product);
 
+    // Delete product images from file system
+    if (product.images && product.images.length > 0) {
+      this.logger.log(
+        `Deleting ${product.images.length} images for product ${product_code}`
+      );
+      this.logger.log(`Images to delete:`, product.images);
+
+      for (const imagePath of product.images) {
+        try {
+          this.logger.log(`Processing image deletion: ${imagePath}`);
+          const deletionResult = this.fileUploadService.deleteFile(imagePath);
+          if (deletionResult) {
+            this.logger.log(`✓ Successfully deleted image: ${imagePath}`);
+          } else {
+            this.logger.warn(`✗ Could not delete image: ${imagePath}`);
+          }
+        } catch (error) {
+          this.logger.error(`✗ Error deleting image ${imagePath}:`, error);
+          // Continue with deletion even if image deletion fails
+        }
+      }
+    } else {
+      this.logger.log(`No images found for product ${product_code}`);
+    }
+
     // First delete any favorites referencing this product
     try {
       // Using raw query to delete favorites by product code
@@ -511,6 +569,7 @@ export class ProductService {
       await favoriteRepo.query('DELETE FROM favorite WHERE product = $1', [
         product_code,
       ]);
+      this.logger.log(`Deleted favorites for product: ${product_code}`);
     } catch (error) {
       this.logger.error('Error deleting favorites:', error);
       // Continue with deletion even if this fails as the main delete might still work
@@ -518,9 +577,13 @@ export class ProductService {
 
     // Then delete the product-branch relationships
     await this.productBranchRepository.delete({ product_code: product_code });
+    this.logger.log(
+      `Deleted product-branch relationships for product: ${product_code}`
+    );
 
     // Finally delete the product
     await this.productRepository.remove(product);
+    this.logger.log(`✓ Product deleted from database: ${product_code}`);
   }
 
   // Helper method for checking if a product exists in DB
