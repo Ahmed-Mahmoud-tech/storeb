@@ -11,10 +11,14 @@ import {
 import { EmployeeService } from '../services/employee.service';
 import { CreateEmployeeDto, UpdateEmployeeDto } from '../dto/employee.dto';
 import { Employee } from '../model/employees.model';
+import { EmployeeNotificationsGateway } from '../gateway/employee-notifications.gateway';
 
 @Controller('employees')
 export class EmployeeController {
-  constructor(private readonly employeeService: EmployeeService) {}
+  constructor(
+    private readonly employeeService: EmployeeService,
+    private readonly employeeNotificationsGateway: EmployeeNotificationsGateway
+  ) {}
 
   /**
    * Create a new employee relationship
@@ -25,7 +29,33 @@ export class EmployeeController {
   async createEmployee(
     @Body() createEmployeeDto: CreateEmployeeDto
   ): Promise<Employee> {
-    return await this.employeeService.createEmployee(createEmployeeDto);
+    const employee =
+      await this.employeeService.createEmployee(createEmployeeDto);
+    const options = {
+      fromUserId: createEmployeeDto.from_user_id,
+      toUserId: employee.to_user_id,
+      page: 1,
+      limit: 1,
+    };
+    const fullEmployeeData =
+      await this.employeeService.findEmployeesWithBranchNamesAndUserInfoByFromUserId(
+        options
+      );
+    const completeEmployee = fullEmployeeData.data[0] || employee;
+
+    this.employeeNotificationsGateway.notifyEmployeeCreated(
+      createEmployeeDto.from_user_id,
+      completeEmployee
+    );
+
+    if (employee.to_user_id) {
+      this.employeeNotificationsGateway.notifyEmployeeOfNewRequest(
+        employee.to_user_id,
+        completeEmployee
+      );
+    }
+
+    return employee;
   }
 
   /**
@@ -95,6 +125,9 @@ export class EmployeeController {
     total: number;
   }> {
     try {
+      // Filter out undefined search parameter
+      const searchParam = search && search.trim() !== '' ? search : undefined;
+
       return await this.employeeService.findEmployeesWithBranchNamesAndUserInfoByFromUserId(
         {
           fromUserId: fromUserId,
@@ -102,7 +135,7 @@ export class EmployeeController {
           status: status,
           page: Number(page),
           limit: Number(limit),
-          search: search,
+          search: searchParam,
         }
       );
     } catch (error) {
@@ -162,7 +195,55 @@ export class EmployeeController {
     @Param('id') id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto
   ): Promise<Employee> {
-    return await this.employeeService.updateEmployee(id, updateEmployeeDto);
+    const employee = await this.employeeService.updateEmployee(
+      id,
+      updateEmployeeDto
+    );
+
+    // Get the updated employee to find owner and employee user IDs
+    const fullEmployee = await this.employeeService.findEmployeeById(id);
+
+    // Fetch complete employee data with branches and user info for socket emission
+    // Try fetching with the owner's ID first
+    let employeeWithAllData = employee;
+    if (fullEmployee.from_user_id) {
+      const completeEmployeeData =
+        await this.employeeService.findEmployeesWithBranchNamesAndUserInfoByFromUserId(
+          {
+            fromUserId: fullEmployee.from_user_id,
+            toUserId: fullEmployee.to_user_id,
+            page: 1,
+            limit: 1,
+          }
+        );
+      if (completeEmployeeData.data && completeEmployeeData.data.length > 0) {
+        employeeWithAllData = completeEmployeeData.data[0];
+      } else {
+        // If not found, construct the complete object from available data
+        employeeWithAllData = {
+          ...fullEmployee,
+          branches: [],
+        } as any;
+      }
+    }
+
+    // Emit socket events with complete data
+    if (fullEmployee.from_user_id) {
+      this.employeeNotificationsGateway.notifyEmployeeStatusChanged(
+        id,
+        fullEmployee.from_user_id,
+        employeeWithAllData
+      );
+    }
+
+    if (fullEmployee.to_user_id) {
+      this.employeeNotificationsGateway.notifyEmployeeOfStatusChange(
+        fullEmployee.to_user_id,
+        employeeWithAllData
+      );
+    }
+
+    return employee;
   }
 
   /**
@@ -172,7 +253,20 @@ export class EmployeeController {
    */
   @Delete(':id')
   async deleteEmployee(@Param('id') id: string): Promise<{ message: string }> {
+    // Get the employee before deleting to find owner
+    const employee = await this.employeeService.findEmployeeById(id);
+
     await this.employeeService.deleteEmployee(id);
+
+    // Emit socket event to owner and employee
+    if (employee.from_user_id) {
+      this.employeeNotificationsGateway.notifyEmployeeRemoved(
+        employee.from_user_id,
+        id,
+        employee.to_user_id
+      );
+    }
+
     return {
       message: `Employee relationship with ID ${id} deleted successfully`,
     };

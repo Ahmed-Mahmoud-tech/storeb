@@ -40,16 +40,19 @@ export class EmployeeService {
     let user: User | undefined;
     if (createEmployeeDto.phone && !createEmployeeDto.to_user_id) {
       this.logger.log(
-        `Looking for user with phone: ${createEmployeeDto.phone}`
+        `Looking for user with phone: ${createEmployeeDto.phone}, country_code: ${createEmployeeDto.country_code}`
       );
-      // Try to find an existing user with this phone number
+      // Try to find an existing user with this phone number and country code
       const existingUser = await this.userRepository.findOne({
-        where: { phone: createEmployeeDto.phone },
+        where: {
+          phone: createEmployeeDto.phone,
+          country_code: createEmployeeDto.country_code,
+        },
       });
 
       if (existingUser) {
         this.logger.log(
-          `Found employee user: ID=${existingUser.id}, phone=${existingUser.phone}, name=${existingUser.name}, current type=${existingUser.type}`
+          `Found employee user: ID=${existingUser.id}, phone=${existingUser.phone}, country_code=${existingUser.country_code}, name=${existingUser.name}, current type=${existingUser.type}`
         );
         this.logger.log(
           `Owner (from_user_id) is: ${createEmployeeDto.from_user_id}`
@@ -58,9 +61,9 @@ export class EmployeeService {
         createEmployeeDto.to_user_id = existingUser.id;
         user = existingUser;
       } else {
-        // No user found with this phone number, return an error
+        // No user found with this phone number and country code, return an error
         throw new NotFoundException(
-          `No user found with phone number ${createEmployeeDto.phone}`
+          `No user found with phone number ${createEmployeeDto.country_code}${createEmployeeDto.phone}`
         );
       }
     } else if (createEmployeeDto.to_user_id) {
@@ -340,7 +343,7 @@ export class EmployeeService {
 
     // Handle the case where "+" in URL query is converted to space
     const rawSearch = options?.search;
-    let search;
+    let search: string | undefined;
 
     if (rawSearch) {
       // If search starts with a space (which could be a "+" from URL)
@@ -352,7 +355,10 @@ export class EmployeeService {
       }
     }
 
-    console.log(search, 'search');
+    // Only log if search is defined
+    if (search) {
+      this.logger.log(`Searching with term: ${search}`);
+    }
 
     const fromUserId = options?.fromUserId;
     const toUserId = options?.toUserId;
@@ -377,9 +383,18 @@ export class EmployeeService {
     }
     if (search) {
       qb.leftJoin('user', 'user', 'employee.to_user_id = user.id');
-      qb.andWhere('(user.name ILIKE :search OR user.phone ILIKE :search)', {
-        search: `%${search}%`,
-      });
+
+      // Build search conditions for phone, country_code, and name
+      // Support searching by:
+      // 1. User name
+      // 2. Phone number (just the digits part)
+      // 3. Country code (e.g., "+20")
+      qb.andWhere(
+        '(user.name ILIKE :search OR user.phone ILIKE :search OR user.country_code ILIKE :search)',
+        {
+          search: `%${search}%`,
+        }
+      );
     }
 
     // Get total count before pagination

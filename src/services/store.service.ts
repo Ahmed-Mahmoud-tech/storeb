@@ -1,6 +1,7 @@
 import { Logger, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { v4 as uuid } from 'uuid';
 import { Store } from '../model/store.model';
 import { Branch } from '../model/branches.model';
 import { Product } from '../model/product.model';
@@ -167,7 +168,6 @@ export class StoreService {
       }
 
       // Use raw SQL for proper JSONB handling
-      const { v4: uuid } = require('uuid');
       const id = uuid();
       const jsonPayload = customerSupportData
         ? JSON.stringify(customerSupportData)
@@ -193,7 +193,7 @@ export class StoreService {
         ]
       );
 
-      return result[0] as Branch;
+      return (result as Branch[])[0];
     } catch (error) {
       this.logger.error(`Error creating branch for store ${storeId}:`, error);
       throw error;
@@ -403,23 +403,23 @@ export class StoreService {
   ): Promise<Branch> {
     try {
       // First check if branch exists
-      const branch = await this.findBranchById(id);
+      await this.findBranchById(id);
 
       // Build update object for non-JSONB fields
-      const updateFields: any = {};
+      const updateFields: Record<string, any> = {};
 
       if (updateData.name) {
         updateFields.name = updateData.name;
       }
 
       if (updateData.coordinates) {
-        if (updateData.coordinates.address) {
+        if (updateData.coordinates?.address) {
           updateFields.address = updateData.coordinates.address;
         }
-        if (updateData.coordinates.lat) {
+        if (updateData.coordinates?.lat) {
           updateFields.lat = updateData.coordinates.lat.toString();
         }
-        if (updateData.coordinates.lng) {
+        if (updateData.coordinates?.lng) {
           updateFields.lang = updateData.coordinates.lng.toString();
         }
       }
@@ -436,23 +436,25 @@ export class StoreService {
         if (typeof supportArray === 'string') {
           try {
             supportArray = JSON.parse(supportArray);
-          } catch (e) {
-            this.logger.warn(
-              `Could not parse supportNumbers as JSON: ${supportArray}`
-            );
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_parseError) {
+            this.logger.warn('Could not parse supportNumbers as JSON');
           }
         }
 
         // Map to proper format
-        const mappedArray = (supportArray as any[]).map((support: any) => {
-          const countryCode = support.countryCode || '+20';
-          const phoneNumber = support.phone || '';
-          return {
-            country_code: countryCode,
-            phone: phoneNumber,
-            type: support.whatsapp ? 'whatsapp' : 'phone',
-          };
-        });
+        const mappedArray = (supportArray as Array<Record<string, any>>).map(
+          (support) => {
+            const countryCode = (support.countryCode as string) || '+20';
+            const phoneNumber = (support.phone as string) || '';
+            const isWhatsapp = (support.whatsapp as boolean) || false;
+            return {
+              country_code: countryCode,
+              phone: phoneNumber,
+              type: isWhatsapp ? 'whatsapp' : 'phone',
+            };
+          }
+        );
 
         // Update regular fields first if any exist
         if (Object.keys(updateFields).length > 0) {

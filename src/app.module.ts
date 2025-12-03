@@ -8,6 +8,7 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './controller/auth.controller';
 import { GoogleStrategy } from './auth/google.strategy';
+import { EmployeeNotificationsGateway } from './gateway/employee-notifications.gateway';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { User } from './model/users.model';
 import { UserService } from './services/user.service';
@@ -194,6 +195,7 @@ import 'winston-daily-rotate-file';
     CustomerProductService,
     FavoriteService,
     UserActionService,
+    EmployeeNotificationsGateway,
   ],
 })
 export class AppModule {}

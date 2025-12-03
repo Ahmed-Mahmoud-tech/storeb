@@ -13,6 +13,10 @@ export class CreateEmployeeDto {
   phone?: string;
 
   @IsOptional()
+  @IsString()
+  country_code?: string;
+
+  @IsOptional()
   @IsEnum(['manager', 'sales'])
   role?: string;
 
