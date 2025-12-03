@@ -323,7 +323,9 @@ export class StoreController implements OnModuleInit {
           dto.branches,
           []
         );
-        this.logger.debug(`Parsed branches for update: ${JSON.stringify(updateStoreDto.branches)}`);
+        this.logger.debug(
+          `Parsed branches for update: ${JSON.stringify(updateStoreDto.branches)}`
+        );
       }
 
       if (dto.ownerId) {

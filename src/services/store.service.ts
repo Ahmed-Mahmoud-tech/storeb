@@ -169,10 +169,14 @@ export class StoreService {
       // Use raw SQL for proper JSONB handling
       const { v4: uuid } = require('uuid');
       const id = uuid();
-      const jsonPayload = customerSupportData ? JSON.stringify(customerSupportData) : null;
-      
-      this.logger.debug(`Creating branch ${id} with JSONB payload: ${jsonPayload}`);
-      
+      const jsonPayload = customerSupportData
+        ? JSON.stringify(customerSupportData)
+        : null;
+
+      this.logger.debug(
+        `Creating branch ${id} with JSONB payload: ${jsonPayload}`
+      );
+
       const result = await this.branchRepository.query(
         `INSERT INTO branches (id, store_id, name, address, lat, lang, is_online, customer_support, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW(), NOW())
@@ -185,7 +189,7 @@ export class StoreService {
           branchDto.coordinates.lat.toString(),
           branchDto.coordinates.lng.toString(),
           branchDto.is_online ?? true,
-          jsonPayload
+          jsonPayload,
         ]
       );
 
@@ -427,13 +431,15 @@ export class StoreService {
       // Handle support numbers separately with proper JSONB casting
       if (updateData.supportNumbers && updateData.supportNumbers.length > 0) {
         let supportArray = updateData.supportNumbers;
-        
+
         // Check if supportNumbers is already a string (shouldn't be, but handle it)
         if (typeof supportArray === 'string') {
           try {
             supportArray = JSON.parse(supportArray);
           } catch (e) {
-            this.logger.warn(`Could not parse supportNumbers as JSON: ${supportArray}`);
+            this.logger.warn(
+              `Could not parse supportNumbers as JSON: ${supportArray}`
+            );
           }
         }
 
@@ -461,7 +467,7 @@ export class StoreService {
         // Update JSONB separately with proper type casting
         const jsonString = JSON.stringify(mappedArray);
         this.logger.debug(`Updating branch ${id} with JSONB: ${jsonString}`);
-        
+
         await this.branchRepository.query(
           `UPDATE branches SET customer_support = $1::jsonb, updated_at = NOW() WHERE id = $2`,
           [jsonString, id]
@@ -804,6 +810,7 @@ export class StoreService {
     let store = await this.storeRepository.findOne({
       where: { name: storeName },
     });
+    console.log(store, '77777777777777777777');
 
     if (!store && storeName.includes('_')) {
       const nameWithSpaces = storeName.replace(/_/g, ' ');
