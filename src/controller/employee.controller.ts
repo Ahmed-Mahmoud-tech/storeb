@@ -114,19 +114,34 @@ export class EmployeeController {
     @Query('status') status?: string | string[],
     @Query('page') page = 1,
     @Query('limit') limit = 10,
-    @Query('search') search?: string
+    @Query('phone') phone?: string,
+    @Query('countryCode') countryCode?: string
   ): Promise<{
     data: (Employee & {
       branches: { id: string; name: string }[];
       phone?: string;
       role?: string;
       name?: string;
+      country_code?: string;
+      fromUser?: any;
+      toUser?: any;
+      store?: any;
     })[];
     total: number;
   }> {
     try {
-      // Filter out undefined search parameter
-      const searchParam = search && search.trim() !== '' ? search : undefined;
+      console.log(
+        `Query params received - phone: "${phone}", countryCode: "${countryCode}", fromUserId: "${fromUserId}"`
+      );
+
+      // Filter out undefined phone parameter
+      const phoneParam = phone && phone.trim() !== '' ? phone : undefined;
+      const countryCodeParam =
+        countryCode && countryCode.trim() !== '' ? countryCode : undefined;
+
+      console.log(
+        `After filtering - phoneParam: "${phoneParam}", countryCodeParam: "${countryCodeParam}"`
+      );
 
       return await this.employeeService.findEmployeesWithBranchNamesAndUserInfoByFromUserId(
         {
@@ -135,7 +150,8 @@ export class EmployeeController {
           status: status,
           page: Number(page),
           limit: Number(limit),
-          search: searchParam,
+          phone: phoneParam,
+          countryCode: countryCodeParam,
         }
       );
     } catch (error) {

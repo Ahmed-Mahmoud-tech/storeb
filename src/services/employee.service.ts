@@ -326,22 +326,35 @@ export class EmployeeService {
     page?: number;
     limit?: number;
     search?: string;
+    phone?: string;
+    countryCode?: string;
   }): Promise<{
     data: (Employee & {
       branches: { id: string; name: string }[];
       phone?: string;
       role?: string;
       name?: string;
+      country_code?: string;
+      fromUser?: User | null;
+      toUser?: User | null;
+      store?: Store | null;
     })[];
     total: number;
-    fromUser?: User | null;
-    toUser?: User | null;
-    store?: Store | null;
   }> {
     const page = options?.page || 1;
     const limit = options?.limit || 10;
 
-    // Handle the case where "+" in URL query is converted to space
+    // Get phone and country code from options
+    const phone =
+      options?.phone && options.phone.trim() !== ''
+        ? options.phone.trim()
+        : undefined;
+    const countryCode =
+      options?.countryCode && options.countryCode.trim() !== ''
+        ? options.countryCode.trim()
+        : undefined;
+
+    // For backwards compatibility, also support the old search parameter
     const rawSearch = options?.search;
     let search: string | undefined;
 
@@ -355,8 +368,12 @@ export class EmployeeService {
       }
     }
 
-    // Only log if search is defined
-    if (search) {
+    // Log search parameters
+    if (phone || countryCode) {
+      this.logger.log(
+        `Searching with phone: "${phone}", countryCode: "${countryCode}"`
+      );
+    } else if (search) {
       this.logger.log(`Searching with term: ${search}`);
     }
 
@@ -381,16 +398,48 @@ export class EmployeeService {
         qb.andWhere('employee.status = :status', { status });
       }
     }
-    if (search) {
-      qb.leftJoin('user', 'user', 'employee.to_user_id = user.id');
+
+    // Add search conditions based on phone and countryCode
+    if (phone || countryCode) {
+      this.logger.log(
+        `Adding user join with phone: "${phone}", countryCode: "${countryCode}"`
+      );
+      // Use INNER JOIN instead of LEFT JOIN to ensure we only get employees with valid user references
+      qb.innerJoin('user', 'toUser', 'employee.to_user_id = toUser.id');
+
+      if (phone && countryCode) {
+        // If both provided, match both (AND)
+        this.logger.log(
+          `Filtering by phone AND countryCode - phone pattern: %${phone}%`
+        );
+        // Ensure we're not filtering out NULL phones
+        const phoneCondition =
+          'toUser.phone IS NOT NULL AND toUser.phone ILIKE :phone';
+        qb.andWhere(`(${phoneCondition})`, { phone: `%${phone}%` });
+        qb.andWhere('toUser.country_code = :countryCode', {
+          countryCode: countryCode,
+        });
+      } else if (phone) {
+        // If only phone provided, search by phone number
+        this.logger.log(`Filtering by phone only - pattern: %${phone}%`);
+        // Ensure we're not filtering out NULL phones
+        const phoneCondition =
+          'toUser.phone IS NOT NULL AND toUser.phone ILIKE :phone';
+        qb.andWhere(`(${phoneCondition})`, { phone: `%${phone}%` });
+      } else if (countryCode) {
+        // If only country code provided, search by country code
+        this.logger.log(`Filtering by countryCode only: ${countryCode}`);
+        qb.andWhere('toUser.country_code = :countryCode', {
+          countryCode: countryCode,
+        });
+      }
+    } else if (search) {
+      // Old search parameter support (backwards compatibility)
+      qb.leftJoin('user', 'toUser', 'employee.to_user_id = toUser.id');
 
       // Build search conditions for phone, country_code, and name
-      // Support searching by:
-      // 1. User name
-      // 2. Phone number (just the digits part)
-      // 3. Country code (e.g., "+20")
       qb.andWhere(
-        '(user.name ILIKE :search OR user.phone ILIKE :search OR user.country_code ILIKE :search)',
+        '(toUser.name ILIKE :search OR toUser.phone ILIKE :search OR toUser.country_code ILIKE :search)',
         {
           search: `%${search}%`,
         }
@@ -399,6 +448,7 @@ export class EmployeeService {
 
     // Get total count before pagination
     const total = await qb.getCount();
+    this.logger.log(`Query count result: ${total}`);
     qb.skip((page - 1) * limit).take(limit);
     const employees = await qb.getMany();
 
@@ -417,6 +467,7 @@ export class EmployeeService {
         let phone: string | undefined = undefined;
         let role: string | undefined = undefined;
         let name: string | undefined = undefined;
+        let countryCode: string | undefined = undefined;
         let fromUser: User | null = null;
         let toUser: User | null = null;
         let store: Store | null = null;
@@ -434,6 +485,7 @@ export class EmployeeService {
             phone = user.phone;
             role = user.type;
             name = user.name;
+            countryCode = user.country_code;
           }
         }
         if (branches.length > 0) {
@@ -454,6 +506,7 @@ export class EmployeeService {
           phone,
           role,
           name,
+          country_code: countryCode,
           fromUser,
           toUser,
           store,
