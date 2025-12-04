@@ -204,25 +204,45 @@ export class ProductService {
           ? tag.split('|')
           : [];
 
-      // Separate color tags from non-color tags
+      // Separate color, size, material, and other tags
       const colorTags: string[] = [];
-      const nonColorTags: string[] = [];
+      const sizeTags: string[] = [];
+      const materialTags: string[] = [];
+      const otherTags: string[] = [];
 
       tagsToFilter.forEach((t) => {
         if (t.startsWith('color:')) {
           colorTags.push(t);
+        } else if (t.startsWith('size:')) {
+          sizeTags.push(t);
+        } else if (t.startsWith('material:')) {
+          materialTags.push(t);
         } else {
-          nonColorTags.push(t);
+          otherTags.push(t);
         }
       });
 
-      // Process non-color tags as before
-      nonColorTags.forEach((t, idx) => {
-        this.logger.log(`Processing non-color tag: ${t}`);
+      // Process other tags (new, featured, etc.)
+      otherTags.forEach((t, idx) => {
+        this.logger.log(`Processing other tag: ${t}`);
         query = query.andWhere(`:tag${idx} = ANY(product.tags)`, {
           [`tag${idx}`]: t,
         });
       });
+
+      // OR logic for size tags
+      if (sizeTags.length > 0) {
+        query = query.andWhere(`product.tags && ARRAY[:...sizeTags]`, {
+          sizeTags,
+        });
+      }
+
+      // OR logic for material tags
+      if (materialTags.length > 0) {
+        query = query.andWhere(`product.tags && ARRAY[:...materialTags]`, {
+          materialTags,
+        });
+      }
 
       // Handle color filtering if color tags exist
       if (colorTags.length > 0) {
