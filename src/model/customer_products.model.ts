@@ -16,6 +16,9 @@ export class CustomerProduct {
   @Column({ type: 'varchar', length: 20 })
   phone: string;
 
+  @Column({ type: 'varchar', length: 10, nullable: true, default: '+20' })
+  countryCode?: string; // Country code for the phone number (e.g., +20, +1, etc.)
+
   @Column('varchar', { array: true })
   product_code!: string[];
 

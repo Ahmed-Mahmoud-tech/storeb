@@ -23,6 +23,7 @@ export class CustomerProductService {
     // employee field is now required
     const entity = this.customerProductRepository.create({
       phone: createDto.phone,
+      countryCode: createDto.countryCode,
       product_code: createDto.product_code,
       employee: createDto.employee,
       branch_id: createDto.branch_id,
@@ -34,7 +35,8 @@ export class CustomerProductService {
     searchType?: 'product' | 'phone' | 'employee',
     storeName?: string,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    countryCode?: string
   ): Promise<{
     data: (CustomerProduct & { productDetails?: Product[] })[];
     total: number;
@@ -71,9 +73,24 @@ export class CustomerProductService {
           );
           break;
         case 'phone':
-          queryBuilder.andWhere('customerProduct.phone LIKE :search', {
-            search: `%${search}%`,
-          });
+          // Search by phone and optionally filter by country code
+          if (countryCode) {
+            // If country code is provided, match both country code and phone number
+            queryBuilder.andWhere(
+              'customerProduct.countryCode = :countryCode',
+              {
+                countryCode,
+              }
+            );
+            queryBuilder.andWhere('customerProduct.phone LIKE :search', {
+              search: `%${search}%`,
+            });
+          } else {
+            // If no country code provided, search by phone number only
+            queryBuilder.andWhere('customerProduct.phone LIKE :search', {
+              search: `%${search}%`,
+            });
+          }
           break;
         case 'employee':
           queryBuilder.andWhere('employee.name LIKE :search', {

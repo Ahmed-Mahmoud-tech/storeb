@@ -11,6 +11,10 @@ export class CreateCustomerProductDto {
   @IsNotEmpty()
   phone!: string;
 
+  @IsOptional()
+  @IsString()
+  countryCode?: string; // Country code for the phone number (e.g., +20, +1, etc.)
+
   @IsArray()
   @IsString({ each: true })
   product_code!: string[];
@@ -32,6 +36,10 @@ export class UpdateCustomerProductDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  countryCode?: string; // Country code for the phone number (e.g., +20, +1, etc.)
 
   @IsOptional()
   @IsArray()

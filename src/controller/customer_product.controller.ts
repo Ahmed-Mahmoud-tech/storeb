@@ -45,6 +45,7 @@ export class CustomerProductController {
     @Query('search') rawSearch?: string,
     @Query('searchType') searchType?: 'product' | 'phone' | 'employee',
     @Query('storeName') storeName?: string,
+    @Query('countryCode') countryCode?: string,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10'
   ): Promise<{
@@ -72,7 +73,8 @@ export class CustomerProductController {
       searchType,
       storeName,
       pageNum,
-      limitNum
+      limitNum,
+      countryCode
     );
   }
   /**
