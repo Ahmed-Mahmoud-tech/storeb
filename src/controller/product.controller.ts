@@ -138,14 +138,20 @@ export class ProductController implements OnModuleInit {
       );
       createProductDto.images = [...imageUrls, ...existingImages];
 
-      // Validate product code uniqueness
-      const exists = await this.productService.productExists(
-        createProductDto.product_code
+      // Validate product code uniqueness within the same branch
+      const exists = await this.productService.productExistsInBranch(
+        createProductDto.product_code,
+        createProductDto.branchIds
       );
-      this.logger.log(createProductDto.product_code, 'exists:', exists);
-
+      this.logger.log(
+        createProductDto.product_code,
+        'exists in branch:',
+        exists
+      );
       if (exists && createProductDto.product_code !== undefined) {
-        throw new BadRequestException('Product with this code already exists');
+        throw new BadRequestException(
+          'Product with this code already exists in this branch'
+        );
       }
 
       // Create product
