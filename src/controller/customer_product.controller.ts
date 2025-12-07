@@ -7,6 +7,8 @@ import {
   Body,
   Param,
   Query,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { CustomerProductService } from '../services/customer_product.service';
 import {
@@ -14,18 +16,29 @@ import {
   UpdateCustomerProductDto,
 } from '../dto/customer_product.dto';
 import { CustomerProduct } from '../model/customer_products.model';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { Request } from 'express';
+import { DataSource } from 'typeorm';
+import { canActivate } from 'src/decorators/auth-helpers';
 
 @Controller('customer-products')
 export class CustomerProductController {
   constructor(
-    private readonly customerProductService: CustomerProductService
+    private readonly customerProductService: CustomerProductService,
+    private readonly dataSource: DataSource
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   async create(
-    @Body() createDto: CreateCustomerProductDto
+    @Body() createDto: CreateCustomerProductDto,
+    @Req() request: Request
   ): Promise<CustomerProduct> {
-    // Ensure employee is set (user id)
+    await canActivate(this.dataSource, {
+      roles: ['owner', 'manager', 'sales'],
+      user: request.user as { id: string; type: string },
+      branchId: createDto.branch_id,
+    });
     return this.customerProductService.create(createDto);
   }
 

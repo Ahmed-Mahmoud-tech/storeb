@@ -7,11 +7,16 @@ import {
   Body,
   Param,
   Query,
+  UnauthorizedException,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { EmployeeService } from '../services/employee.service';
 import { CreateEmployeeDto, UpdateEmployeeDto } from '../dto/employee.dto';
 import { Employee } from '../model/employees.model';
 import { EmployeeNotificationsGateway } from '../gateway/employee-notifications.gateway';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 @Controller('employees')
 export class EmployeeController {
@@ -26,9 +31,15 @@ export class EmployeeController {
    * POST /employees
    */
   @Post()
+  @UseGuards(JwtAuthGuard)
   async createEmployee(
-    @Body() createEmployeeDto: CreateEmployeeDto
+    @Body() createEmployeeDto: CreateEmployeeDto,
+    @Req() request: Request
   ): Promise<Employee> {
+    const user = request.user as { id: string; type?: string } | undefined;
+    if (!user?.id || createEmployeeDto.from_user_id !== user.id) {
+      throw new UnauthorizedException('User not authenticated');
+    }
     const employee =
       await this.employeeService.createEmployee(createEmployeeDto);
     const options = {
@@ -37,6 +48,7 @@ export class EmployeeController {
       page: 1,
       limit: 1,
     };
+
     const fullEmployeeData =
       await this.employeeService.findEmployeesWithBranchNamesAndUserInfoByFromUserId(
         options
@@ -268,10 +280,17 @@ export class EmployeeController {
    * DELETE /employees/:id
    */
   @Delete(':id')
-  async deleteEmployee(@Param('id') id: string): Promise<{ message: string }> {
+  @UseGuards(JwtAuthGuard)
+  async deleteEmployee(
+    @Param('id') id: string,
+    @Req() request: Request
+  ): Promise<{ message: string }> {
     // Get the employee before deleting to find owner
     const employee = await this.employeeService.findEmployeeById(id);
-
+    const user = request.user as { id: string; type?: string } | undefined;
+    if (!user?.id || employee.from_user_id !== user.id) {
+      throw new UnauthorizedException('User not authenticated');
+    }
     await this.employeeService.deleteEmployee(id);
 
     // Emit socket event to owner and employee
