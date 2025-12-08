@@ -54,7 +54,9 @@ export class CustomerProductController {
    * storeName: filters products by store name (returns only products from branches of that store)
    */
   @Get()
+  @UseGuards(JwtAuthGuard)
   async findAll(
+    @Req() request: Request,
     @Query('search') rawSearch?: string,
     @Query('searchType') searchType?: 'product' | 'phone' | 'employee',
     @Query('storeName') storeName?: string,
@@ -67,6 +69,11 @@ export class CustomerProductController {
     page: number;
     limit: number;
   }> {
+    await canActivate(this.dataSource, {
+      roles: ['owner', 'manager', 'sales'],
+      user: request.user as { id: string; type: string },
+      storeName: storeName,
+    });
     // Handle the case where "+" in URL query is converted to space
     let search = rawSearch;
     if (search) {
@@ -126,7 +133,15 @@ export class CustomerProductController {
    * DELETE /customer-products/:id
    */
   @Delete(':id')
-  async remove(@Param('id') id: string): Promise<{ message: string }> {
+  @UseGuards(JwtAuthGuard)
+  async remove(
+    @Param('id') id: string,
+    @Req() request: Request
+  ): Promise<{ message: string }> {
+    await canActivate(this.dataSource, {
+      roles: ['owner', 'manager', 'sales'],
+      user: request.user as { id: string; type: string },
+    });
     await this.customerProductService.remove(id);
     return {
       message: `CustomerProduct with id ${id} deleted successfully`,

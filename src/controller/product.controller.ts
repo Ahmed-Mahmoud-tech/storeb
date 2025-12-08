@@ -14,6 +14,7 @@ import {
   NotFoundException,
   Req,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,13 +23,15 @@ import { FileUploadService } from '../services/file-upload.service';
 import { FavoriteService } from '../services/favorite.service';
 import { UserActionService } from '../services/user-action.service';
 import { StoreService } from '../services/store.service';
-import { EmployeeService } from '../services/employee.service';
 import { CreateProductDto, UpdateProductDto } from '../dto/product.dto';
 import { Product } from '../model/product.model';
 import { AuthHelper } from '../utils/auth.helper';
 import { createFileFieldsInterceptor } from '../interceptors/file-upload.interceptor';
 import { FormDataParserInterceptor } from '../interceptors/form-data-parser.interceptor';
 import { FormDataHelper } from '../utils/form-data.helper';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { canActivate } from 'src/decorators/auth-helpers';
+import { DataSource } from 'typeorm';
 
 @Controller('products')
 export class ProductController implements OnModuleInit {
@@ -40,7 +43,7 @@ export class ProductController implements OnModuleInit {
     private readonly favoriteService: FavoriteService,
     private readonly userActionService: UserActionService,
     private readonly storeService: StoreService,
-    private readonly employeeService: EmployeeService
+    private readonly dataSource: DataSource
   ) {}
 
   onModuleInit() {
@@ -54,11 +57,13 @@ export class ProductController implements OnModuleInit {
    *
    * POST /products
    */ @Post()
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FormDataParserInterceptor,
     createFileFieldsInterceptor([{ name: 'images', maxCount: 3 }])
   )
   async createProduct(
+    @Req() req: Request,
     @Body() dto: Record<string, unknown>,
     @UploadedFiles()
     files: { images?: Express.Multer.File[] }
@@ -67,6 +72,16 @@ export class ProductController implements OnModuleInit {
     this.logger.log('Files received:', files);
     this.logger.log('DTO received:', dto);
     try {
+      await canActivate(this.dataSource, {
+        roles: ['owner', 'manager'],
+        user: req.user as { id: string; type: string },
+        branchId: dto.branchIds
+          ? Array.isArray(dto.branchIds)
+            ? (dto.branchIds as string[])[0]
+            : (dto.branchIds as string)
+          : undefined,
+      });
+
       // Create a type-safe DTO object
       const createProductDto = new CreateProductDto();
 
@@ -619,8 +634,13 @@ export class ProductController implements OnModuleInit {
    * DELETE /products/:productCode
    */
   @Delete(':productCode')
-  async remove(@Param('productCode') productCode: string) {
+  @UseGuards(JwtAuthGuard)
+  async remove(@Req() req: Request, @Param('productCode') productCode: string) {
     try {
+      await canActivate(this.dataSource, {
+        roles: ['owner', 'manager'],
+        user: req.user as { id: string; type: string },
+      });
       await this.productService.remove(productCode);
       return { message: `Product ${productCode} deleted successfully` };
     } catch (error: unknown) {

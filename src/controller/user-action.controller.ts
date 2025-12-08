@@ -15,10 +15,14 @@ import {
   GetUserActionsQueryDto,
 } from '../dto/user-action.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-
+import { canActivate } from 'src/decorators/auth-helpers';
+import { DataSource } from 'typeorm';
 @Controller('user-actions')
 export class UserActionController {
-  constructor(private readonly userActionService: UserActionService) {}
+  constructor(
+    private readonly userActionService: UserActionService,
+    private readonly dataSource: DataSource
+  ) {}
 
   /**
    * Record a user action (supports both authenticated and anonymous users)
@@ -104,9 +108,15 @@ export class UserActionController {
   @Get('store/:storeId')
   @UseGuards(JwtAuthGuard)
   async getStoreActions(
+    @Req() request: Request,
     @Param('storeId') storeId: string,
     @Query() query: GetUserActionsQueryDto
   ) {
+    await canActivate(this.dataSource, {
+      roles: ['owner', 'manager', 'sales'],
+      user: request.user as { id: string; type: string },
+      storeId: storeId,
+    });
     return await this.userActionService.getStoreActions(storeId, query);
   }
 

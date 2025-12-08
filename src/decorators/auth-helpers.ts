@@ -1,5 +1,4 @@
 import { Store } from '../model/store.model';
-import { Employee } from '../model/employees.model';
 import { Branch } from '../model/branches.model';
 import { EmployeeBranch } from '../model/employee_branches.model';
 import { UnauthorizedException } from '@nestjs/common/exceptions/unauthorized.exception';
@@ -30,7 +29,8 @@ export function checkUserRole(
 export async function checkUserStoreAccess(
   dataSource: DataSource,
   userId: string,
-  storeId: string
+  storeId: string,
+  userType?: string
 ): Promise<string | null> {
   if (!userId || !storeId) {
     return null;
@@ -39,7 +39,6 @@ export async function checkUserStoreAccess(
   try {
     const storeRepository = dataSource.getRepository(Store);
     const branchRepository = dataSource.getRepository(Branch);
-    const employeeRepository = dataSource.getRepository(Employee);
     const employeeBranchRepository = dataSource.getRepository(EmployeeBranch);
 
     // Check if user is the store owner
@@ -69,19 +68,59 @@ export async function checkUserStoreAccess(
     });
 
     if (employeeBranch && branchIds.includes(employeeBranch.branch_id)) {
-      // Get employee role status
-      const employee = await employeeRepository.findOne({
-        where: { to_user_id: userId, from_user_id: storeId },
-      });
+      return userType; // Default to employee if no specific status
+    }
 
-      if (employee) {
-        const status = employee.status?.toLowerCase();
-        if (['manager', 'employee', 'salesman'].includes(status)) {
-          return status;
-        }
-      }
+    return null;
+  } catch (error) {
+    console.error('Error checking user store access:', error);
+    return null;
+  }
+}
 
-      return 'employee'; // Default to employee if no specific status
+export async function checkUserStoreAccessByName(
+  dataSource: DataSource,
+  userId: string,
+  storeName: string,
+  userType?: string
+): Promise<string | null> {
+  if (!userId || !storeName) {
+    return null;
+  }
+
+  try {
+    const storeRepository = dataSource.getRepository(Store);
+    const branchRepository = dataSource.getRepository(Branch);
+    const employeeBranchRepository = dataSource.getRepository(EmployeeBranch);
+
+    // Check if user is the store owner
+    const store = await storeRepository.findOne({
+      where: { name: storeName, owner_id: userId },
+    });
+    if (store) {
+      return 'owner';
+    }
+
+    // Check if user is an employee/manager of this store
+    const branches = await branchRepository.find({
+      where: { store_id: store.id },
+    });
+
+    if (branches.length === 0) {
+      return null;
+    }
+
+    const branchIds = branches.map((branch) => branch.id);
+
+    // Check if user is in employee_branches for any branch of this store
+    const employeeBranch = await employeeBranchRepository.findOne({
+      where: {
+        employee_id: userId,
+      },
+    });
+
+    if (employeeBranch && branchIds.includes(employeeBranch.branch_id)) {
+      return userType; // Default to employee if no specific status
     }
 
     return null;
@@ -113,9 +152,10 @@ export async function canActivate(
     user: { id: string; type: string };
     storeId?: string;
     branchId?: string;
+    storeName?: string;
   }
 ): Promise<boolean> {
-  const { roles, user, storeId, branchId } = data;
+  const { roles, user, storeId, branchId, storeName } = data;
   const { id, type } = user;
 
   if (!user) {
@@ -139,7 +179,39 @@ export async function canActivate(
       throw new ForbiddenException('Store ID is required for this operation');
     }
 
-    const userStoreRole = await checkUserStoreAccess(dataSource, id, storeId);
+    const userStoreRole = await checkUserStoreAccess(
+      dataSource,
+      id,
+      storeId,
+      type
+    );
+    if (!userStoreRole) {
+      throw new ForbiddenException(
+        'Access denied. You do not have access to this store'
+      );
+    }
+
+    // Verify user has one of the required roles in the store
+    const allowedStoreRoles = roles || [
+      'owner',
+      'manager',
+      'employee',
+      'sales',
+    ];
+    if (!allowedStoreRoles.includes(userStoreRole)) {
+      throw new ForbiddenException(
+        `Access denied. Required store roles: ${allowedStoreRoles.join(', ')}`
+      );
+    }
+  }
+
+  if (storeName) {
+    const userStoreRole = await checkUserStoreAccessByName(
+      dataSource,
+      id,
+      storeName,
+      type
+    );
     if (!userStoreRole) {
       throw new ForbiddenException(
         'Access denied. You do not have access to this store'

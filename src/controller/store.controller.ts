@@ -15,6 +15,7 @@ import {
   Patch,
   Logger,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { StoreService } from '../services/store.service';
@@ -26,6 +27,9 @@ import { Branch } from '../model/branches.model';
 import { createFileFieldsInterceptor } from '../interceptors/file-upload.interceptor';
 import { FormDataParserInterceptor } from '../interceptors/form-data-parser.interceptor';
 import { FormDataHelper } from '../utils/form-data.helper';
+import { DataSource } from 'typeorm';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { canActivate } from 'src/decorators/auth-helpers';
 
 @Controller('stores')
 export class StoreController implements OnModuleInit {
@@ -33,7 +37,8 @@ export class StoreController implements OnModuleInit {
 
   constructor(
     private readonly storeService: StoreService,
-    private readonly fileUploadService: FileUploadService
+    private readonly fileUploadService: FileUploadService,
+    private readonly dataSource: DataSource
   ) {}
 
   onModuleInit() {
@@ -150,10 +155,17 @@ export class StoreController implements OnModuleInit {
    * POST /stores/:storeId/branches
    */
   @Post(':storeId/branches')
+  @UseGuards(JwtAuthGuard)
   async createBranch(
+    @Req() req: Request,
     @Param('storeId') storeId: string,
     @Body() createBranchDto: CreateBranchDto
   ): Promise<Branch> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: req.user as { id: string; type: string },
+      storeId: storeId,
+    });
     const branch = await this.storeService.createBranchForStore(
       storeId,
       createBranchDto
@@ -282,6 +294,7 @@ export class StoreController implements OnModuleInit {
    * PUT /stores/:id
    */
   @Put(':id')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FormDataParserInterceptor,
     createFileFieldsInterceptor([
@@ -290,12 +303,18 @@ export class StoreController implements OnModuleInit {
     ])
   )
   async updateStore(
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() dto: Record<string, unknown>,
     @UploadedFiles()
     files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] }
   ): Promise<Store> {
     try {
+      await canActivate(this.dataSource, {
+        roles: ['owner'],
+        user: req.user as { id: string; type: string },
+        storeId: id,
+      });
       const updateStoreDto: Partial<CreateStoreDto> = {};
 
       // Only set properties that are provided
@@ -398,7 +417,16 @@ export class StoreController implements OnModuleInit {
    * DELETE /stores/:id
    */
   @Delete(':id')
-  async deleteStore(@Param('id') id: string): Promise<{ message: string }> {
+  @UseGuards(JwtAuthGuard)
+  async deleteStore(
+    @Req() req: Request,
+    @Param('id') id: string
+  ): Promise<{ message: string }> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: req.user as { id: string; type: string },
+      storeId: id,
+    });
     await this.storeService.deleteStore(id);
     this.logger.log(`Store deleted (ID: ${id})`);
     return { message: `Store with ID ${id} deleted successfully` };
@@ -438,10 +466,17 @@ export class StoreController implements OnModuleInit {
    * PUT /stores/branches/:branchId
    */
   @Put('branches/:branchId')
+  @UseGuards(JwtAuthGuard)
   async updateBranch(
+    @Req() req: Request,
     @Param('branchId') branchId: string,
     @Body() updateBranchDto: Partial<CreateBranchDto>
   ): Promise<Branch> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: req.user as { id: string; type: string },
+      branchId: branchId,
+    });
     const branch = await this.storeService.updateBranch(
       branchId,
       updateBranchDto
@@ -456,10 +491,17 @@ export class StoreController implements OnModuleInit {
    * PATCH /stores/branches/:branchId
    */
   @Patch('branches/:branchId')
+  @UseGuards(JwtAuthGuard)
   async patchBranch(
+    @Req() req: Request,
     @Param('branchId') branchId: string,
     @Body() updateBranchDto: Partial<CreateBranchDto>
   ): Promise<Branch> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: req.user as { id: string; type: string },
+      branchId: branchId,
+    });
     const branch = await this.storeService.updateBranch(
       branchId,
       updateBranchDto
@@ -476,9 +518,16 @@ export class StoreController implements OnModuleInit {
    * DELETE /stores/branches/:branchId
    */
   @Delete('branches/:branchId')
+  @UseGuards(JwtAuthGuard)
   async deleteBranch(
+    @Req() req: Request,
     @Param('branchId') branchId: string
   ): Promise<{ message: string }> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: req.user as { id: string; type: string },
+      branchId: branchId,
+    });
     await this.storeService.deleteBranch(branchId);
     this.logger.log(`Branch deleted (ID: ${branchId})`);
     return { message: `Branch with ID ${branchId} deleted successfully` };
@@ -490,10 +539,17 @@ export class StoreController implements OnModuleInit {
    * GET /stores/owner/:ownerId
    */
   @Get('owner/:ownerId')
+  @UseGuards(JwtAuthGuard)
   async getStoreByOwnerId(
+    // @Req() req: Request,
     @Param('ownerId') ownerId: string
   ): Promise<Store | null> {
     try {
+      // await canActivate(this.dataSource, {
+      //   roles: ['owner'],
+      //   user: req.user as { id: string; type: string },
+      //   storeId: ownerId,
+      // });
       const store = await this.storeService.findStoreByOwnerId(ownerId);
       this.logger.log(
         `Retrieved store for owner ${ownerId}: ${store.name} (ID: ${store.id})`

@@ -49,10 +49,17 @@ export class UserController {
     return await this.userService.getUserById(id);
   }
   @Put(':id')
+  @UseGuards(JwtAuthGuard)
   async updateUser(
     @Param('id') id: string,
-    @Body() updateUserDto: UpdateUserDto
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() request: Request
   ): Promise<User> {
+    const user = request.user as { id: string } | undefined;
+    const userId = user?.id;
+    if (!userId || userId !== id) {
+      throw new Error('User ID not found in token');
+    }
     return await this.userService.updateUser(id, updateUserDto);
   }
 

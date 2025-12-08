@@ -17,12 +17,15 @@ import { CreateEmployeeDto, UpdateEmployeeDto } from '../dto/employee.dto';
 import { Employee } from '../model/employees.model';
 import { EmployeeNotificationsGateway } from '../gateway/employee-notifications.gateway';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { canActivate } from 'src/decorators/auth-helpers';
+import { DataSource } from 'typeorm';
 
 @Controller('employees')
 export class EmployeeController {
   constructor(
     private readonly employeeService: EmployeeService,
-    private readonly employeeNotificationsGateway: EmployeeNotificationsGateway
+    private readonly employeeNotificationsGateway: EmployeeNotificationsGateway,
+    private readonly dataSource: DataSource
   ) {}
 
   /**
@@ -32,10 +35,16 @@ export class EmployeeController {
    */
   @Post()
   @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   async createEmployee(
     @Body() createEmployeeDto: CreateEmployeeDto,
     @Req() request: Request
   ): Promise<Employee> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: request.user as { id: string; type: string },
+      branchId: createEmployeeDto.branches[0],
+    });
     const user = request.user as { id: string; type?: string } | undefined;
     if (!user?.id || createEmployeeDto.from_user_id !== user.id) {
       throw new UnauthorizedException('User not authenticated');
@@ -283,8 +292,14 @@ export class EmployeeController {
   @UseGuards(JwtAuthGuard)
   async deleteEmployee(
     @Param('id') id: string,
-    @Req() request: Request
+    @Req() request: Request,
+    @Query('storeName') storeName: string
   ): Promise<{ message: string }> {
+    await canActivate(this.dataSource, {
+      roles: ['owner'],
+      user: request.user as { id: string; type: string },
+      storeName: storeName,
+    });
     // Get the employee before deleting to find owner
     const employee = await this.employeeService.findEmployeeById(id);
     const user = request.user as { id: string; type?: string } | undefined;
