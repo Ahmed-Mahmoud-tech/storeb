@@ -223,9 +223,18 @@ export class StoreController implements OnModuleInit {
   }
 
   @Get('storeName/:name')
-  async findStoreByName(@Param('name') name: string): Promise<Store> {
-    const store = await this.storeService.findStoreByName(name);
-    this.logger.log(`Retrieved store by name: ${store.name} (ID: ${store.id})`);
+  @UseGuards(JwtAuthGuard)
+  async findStoreByName(
+    @Req() request: Request,
+    @Param('name') name: string
+  ): Promise<Store> {
+    const user = request.user as { id: string; type?: string } | undefined;
+    const userId = user?.id;
+    const type = user?.type;
+    const store = await this.storeService.findStoreByName(name, userId, type);
+    this.logger.log(
+      `${JSON.stringify(user)} Retrieved store by name: ${store.name} (ID: ${store.id})`
+    );
     return store;
   }
 

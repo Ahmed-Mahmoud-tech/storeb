@@ -218,7 +218,9 @@ export class StoreService {
   }
 
   async findStoreByName(
-    name: string
+    name: string,
+    userId?: string,
+    type?: string
   ): Promise<Store & { branches?: Branch[]; owner?: any }> {
     let store = await this.storeRepository.findOne({ where: { name } });
 
@@ -238,9 +240,34 @@ export class StoreService {
     }
 
     // Get branches for this store
-    const branches = await this.branchRepository.find({
-      where: { store_id: store.id },
-    });
+    let branches: Branch[];
+    console.log(type, '77777777777777777777', userId);
+
+    // If user is owner, return all branches; if employee/manager, return only their assigned branches
+    if (type === 'owner' || !userId) {
+      branches = await this.branchRepository.find({
+        where: { store_id: store.id },
+      });
+    } else {
+      // For employees/managers, get only branches they are assigned to
+      branches = (await this.storeRepository.manager
+        .createQueryBuilder()
+        .select('branch.*')
+        .from('branches', 'branch')
+        .innerJoin(
+          'employee_branches',
+          'emp_branch',
+          'branch.id = emp_branch.branch_id'
+        )
+        .innerJoin(
+          'employees',
+          'employee',
+          'emp_branch.employee_id = employee.id'
+        )
+        .where('branch.store_id = :storeId', { storeId: store.id })
+        .andWhere('employee.to_user_id = :userId', { userId })
+        .getRawMany()) as unknown as Branch[];
+    }
 
     // Return store with branches and ensure owner_id is included
     // Fetch full owner data from user table

@@ -291,21 +291,16 @@ export class EmployeeController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   async deleteEmployee(
-    @Param('id') id: string,
-    @Req() request: Request,
-    @Query('storeName') storeName: string
+    @Param('id') id: string
+    // @Req() request: Request
+    // @Query('storeName') storeName: string
   ): Promise<{ message: string }> {
-    await canActivate(this.dataSource, {
-      roles: ['owner'],
-      user: request.user as { id: string; type: string },
-      storeName: storeName,
-    });
     // Get the employee before deleting to find owner
     const employee = await this.employeeService.findEmployeeById(id);
-    const user = request.user as { id: string; type?: string } | undefined;
-    if (!user?.id || employee.from_user_id !== user.id) {
-      throw new UnauthorizedException('User not authenticated');
-    }
+    // const user = request.user as { id: string; type?: string } | undefined;
+    // if (!user?.id || employee.from_user_id !== user.id) {
+    //   throw new UnauthorizedException('User not authenticated');
+    // }
     await this.employeeService.deleteEmployee(id);
 
     // Emit socket event to owner and employee

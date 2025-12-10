@@ -61,11 +61,15 @@ export async function checkUserStoreAccess(
     const branchIds = branches.map((branch) => branch.id);
 
     // Check if user is in employee_branches for any branch of this store
-    const employeeBranch = await employeeBranchRepository.findOne({
-      where: {
-        employee_id: userId,
-      },
-    });
+    const employeeBranch = await employeeBranchRepository
+      .createQueryBuilder('employeeBranch')
+      .innerJoin(
+        'employees',
+        'employee',
+        'employeeBranch.employee_id = employee.id'
+      )
+      .where('employee.to_user_id = :userId', { userId })
+      .getOne();
 
     if (employeeBranch && branchIds.includes(employeeBranch.branch_id)) {
       return userType; // Default to employee if no specific status
@@ -95,9 +99,9 @@ export async function checkUserStoreAccessByName(
 
     // Check if user is the store owner
     const store = await storeRepository.findOne({
-      where: { name: storeName, owner_id: userId },
+      where: { name: storeName },
     });
-    if (store) {
+    if (store.owner_id === userId) {
       return 'owner';
     }
 
@@ -113,12 +117,15 @@ export async function checkUserStoreAccessByName(
     const branchIds = branches.map((branch) => branch.id);
 
     // Check if user is in employee_branches for any branch of this store
-    const employeeBranch = await employeeBranchRepository.findOne({
-      where: {
-        employee_id: userId,
-      },
-    });
-
+    const employeeBranch = await employeeBranchRepository
+      .createQueryBuilder('employeeBranch')
+      .innerJoin(
+        'employees',
+        'employee',
+        'employeeBranch.employee_id = employee.id'
+      )
+      .where('employee.to_user_id = :userId', { userId })
+      .getOne();
     if (employeeBranch && branchIds.includes(employeeBranch.branch_id)) {
       return userType; // Default to employee if no specific status
     }
@@ -233,6 +240,8 @@ export async function canActivate(
   }
 
   if (branchId) {
+    console.log(branchId, id, type, 'branchId, id, type');
+
     if (!branchId) {
       throw new ForbiddenException('Branch ID is required for this operation');
     }
@@ -254,10 +263,18 @@ export async function canActivate(
         }
       }
     } else {
-      const branch = await employeeBranchRepository.findOne({
-        where: { employee_id: user.id, branch_id: branchId },
-      });
-      if (!branch) {
+      const branches = await employeeBranchRepository
+        .createQueryBuilder('employeeBranch')
+        .innerJoin(
+          'employees',
+          'employee',
+          'employeeBranch.employee_id = employee.id'
+        )
+        .where('employee.to_user_id = :userId', { userId: id })
+        .andWhere('employeeBranch.branch_id = :branchId', { branchId })
+        .getOne();
+
+      if (!branches) {
         throw new ForbiddenException('Access denied. Branch not found');
       }
     }
