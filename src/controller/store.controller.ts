@@ -29,6 +29,7 @@ import { FormDataParserInterceptor } from '../interceptors/form-data-parser.inte
 import { FormDataHelper } from '../utils/form-data.helper';
 import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from 'src/auth/optional-jwt-auth.guard';
 import { canActivate } from 'src/decorators/auth-helpers';
 
 @Controller('stores')
@@ -223,14 +224,17 @@ export class StoreController implements OnModuleInit {
   }
 
   @Get('storeName/:name')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   async findStoreByName(
     @Req() request: Request,
     @Param('name') name: string
   ): Promise<Store> {
+    console.log('2222222222222222222222222222');
     const user = request.user as { id: string; type?: string } | undefined;
     const userId = user?.id;
     const type = user?.type;
+    // console.log(name, userId, type, '2222222222222222222222222222');
+
     const store = await this.storeService.findStoreByName(name, userId, type);
     this.logger.log(
       `${JSON.stringify(user)} Retrieved store by name: ${store.name} (ID: ${store.id})`

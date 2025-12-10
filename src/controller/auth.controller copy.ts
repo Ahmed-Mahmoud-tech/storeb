@@ -49,54 +49,6 @@ export class AuthController {
     private readonly employeeService: EmployeeService
   ) {}
 
-  /**
-   * Helper method to fetch store name for manager and sales users
-   * @param userId The user ID
-   * @param userType The user type (manager or sales)
-   * @returns Store name if found, undefined otherwise
-   */
-  private async getStoreNameForManagerOrSales(
-    userId: string,
-    userType: string
-  ): Promise<string | undefined> {
-    if (userType !== 'manager' && userType !== 'sales') {
-      return undefined;
-    }
-
-    try {
-      const employees =
-        await this.employeeService.findEmployeesByToUserId(userId);
-      if (employees && employees.length > 0) {
-        const activeEmployee = employees.find(
-          (emp) => emp.status === 'activate'
-        );
-        if (activeEmployee) {
-          const employer = await this.userService.getUserById(
-            activeEmployee.from_user_id
-          );
-          if (employer && employer.type === 'owner') {
-            const store = await this.storeService.findStoreByOwnerId(
-              employer.id
-            );
-            if (store) {
-              this.logger.log(
-                `Found store "${store.name}" for ${userType} user: ${userId}`
-              );
-              return store.name;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error fetching store for ${userType} user ${userId}:`,
-        error
-      );
-    }
-
-    return undefined;
-  }
-
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   googleLogin(): void {
@@ -112,20 +64,7 @@ export class AuthController {
       throw new HttpException('User ID not found', HttpStatus.BAD_REQUEST);
     }
     this.logger.log(`Fetching profile for user ID: ${userId}`);
-
-    const user = await this.userService.getUserById(userId);
-
-    // Fetch store name for manager and sales users
-    let storeName: string | undefined;
-    if (user.type === 'manager' || user.type === 'sales') {
-      storeName = await this.getStoreNameForManagerOrSales(userId, user.type);
-    }
-
-    // Return user data with store name
-    return {
-      ...user,
-      storeName: storeName || null,
-    };
+    return this.userService.getUserById(userId);
   }
 
   @Get('google/callback')
@@ -433,10 +372,37 @@ export class AuthController {
         }
       } else if (user.type === 'manager' || user.type === 'sales') {
         // For managers and sales, fetch their store name from employment relationship
-        storeName = await this.getStoreNameForManagerOrSales(
-          user.id,
-          user.type
-        );
+        try {
+          const employees = await this.employeeService.findEmployeesByToUserId(
+            user.id
+          );
+          if (employees && employees.length > 0) {
+            const activeEmployee = employees.find(
+              (emp) => emp.status === 'activate'
+            );
+            if (activeEmployee) {
+              const employer = await this.userService.getUserById(
+                activeEmployee.from_user_id
+              );
+              if (employer && employer.type === 'owner') {
+                const store = await this.storeService.findStoreByOwnerId(
+                  employer.id
+                );
+                if (store) {
+                  storeName = store.name;
+                  this.logger.log(
+                    `Found store "${storeName}" for ${user.type} user: ${user.email}`
+                  );
+                }
+              }
+            }
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error fetching store for ${user.type} user ${user.email}:`,
+            error
+          );
+        }
       }
 
       // Generate JWT token
