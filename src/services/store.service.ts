@@ -556,6 +556,21 @@ export class StoreService {
             where: { product_code: pb.product_code },
           });
           if (product) {
+            // Delete all product images before deleting the product
+            if (product.images && product.images.length > 0) {
+              for (const imagePath of product.images) {
+                try {
+                  this.fileUploadService.deleteFile(imagePath);
+                } catch (imageError) {
+                  this.logger.warn(
+                    `Failed to delete image ${imagePath} for product ${pb.product_code}:`,
+                    imageError
+                  );
+                  // Continue deleting other images even if one fails
+                }
+              }
+            }
+
             await this.productRepository.remove(product);
             this.logger.log(
               `Product ${pb.product_code} deleted (no other branches have it)`
