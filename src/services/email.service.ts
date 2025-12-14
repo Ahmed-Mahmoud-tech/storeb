@@ -15,26 +15,33 @@ export class EmailService {
     const smtpHost = process.env.SMTP_HOST;
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 
     // Check if we have real SMTP credentials
     if (smtpHost && smtpUser && smtpPass) {
       try {
         this.transporter = nodemailer.createTransport({
           host: smtpHost,
-          port: parseInt(process.env.SMTP_PORT || '587'),
-          secure: false,
+          port: smtpPort,
+          secure: smtpSecure,
           auth: {
             user: smtpUser,
             pass: smtpPass,
           },
         });
         this.useRealEmail = true;
-        this.logger.log('📧 Real email service initialized with Gmail SMTP');
+        this.logger.log(
+          `📧 Real email service initialized with SMTP provider: ${smtpHost}:${smtpPort} (secure: ${smtpSecure})`
+        );
+        // Test the connection
+        this.testSMTPConnection();
       } catch (error) {
         this.logger.warn(
           '⚠️ Failed to initialize real email service, falling back to mock'
         );
         this.useRealEmail = false;
+        console.log(error);
       }
     } else {
       this.logger.log(
@@ -44,12 +51,31 @@ export class EmailService {
     }
   }
 
+  private async testSMTPConnection() {
+    if (!this.transporter) return;
+
+    try {
+      await this.transporter.verify();
+      this.logger.log('✅ SMTP connection verified successfully!');
+    } catch (error) {
+      this.logger.error('❌ SMTP connection failed:');
+      if (error instanceof Error) {
+        this.logger.error('Error message:', error.message);
+        this.logger.error('Error code:', error as any);
+      } else {
+        this.logger.error('Error details:', JSON.stringify(error));
+      }
+      this.useRealEmail = false;
+    }
+  }
+
   async sendVerificationEmail(
     email: string,
     verificationToken: string
   ): Promise<void> {
     const verificationUrl = `${process.env.CLIENT_BASE_URL}/verify-email?token=${verificationToken}`;
-    const fromEmail = process.env.DEFAULT_FROM_EMAIL || 'noreply@store.com';
+    const defaultEmail = process.env.DEFAULT_FROM_EMAIL || 'noreply@store.com';
+    const fromEmail = `Layq <${defaultEmail}>`;
 
     if (this.useRealEmail && this.transporter) {
       // Send real email
@@ -87,7 +113,10 @@ export class EmailService {
         this.logger.error(
           `❌ Failed to send real email to ${email}, falling back to mock:`
         );
-        this.logger.error(`❌ Gmail SMTP Error Details:`, error);
+        this.logger.error(
+          `❌ SMTP Error Details:`,
+          error instanceof Error ? error.message : error
+        );
         this.sendMockVerificationEmail(email, verificationUrl, fromEmail);
       }
     } else {
@@ -116,7 +145,8 @@ export class EmailService {
     resetToken: string
   ): Promise<void> {
     const resetUrl = `${process.env.CLIENT_BASE_URL}/reset-password?token=${resetToken}`;
-    const fromEmail = process.env.DEFAULT_FROM_EMAIL || 'noreply@store.com';
+    const defaultEmail = process.env.DEFAULT_FROM_EMAIL || 'noreply@store.com';
+    const fromEmail = `Layq <${defaultEmail}>`;
 
     if (this.useRealEmail && this.transporter) {
       // Send real email
@@ -153,8 +183,11 @@ export class EmailService {
         );
       } catch (error) {
         this.logger.error(
-          `❌ Failed to send real email to ${email}, falling back to mock:`,
-          error
+          `❌ Failed to send real email to ${email}, falling back to mock:`
+        );
+        this.logger.error(
+          `❌ SMTP Error Details:`,
+          error instanceof Error ? error.message : error
         );
         this.sendMockPasswordResetEmail(email, resetUrl, fromEmail);
       }
