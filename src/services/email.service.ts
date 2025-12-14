@@ -1,80 +1,34 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter | null = null;
-  private useRealEmail: boolean = false;
+  private resend: Resend | null = null;
+  private fromEmail: string = '';
 
   constructor() {
-    this.initializeTransporter();
+    this.initializeResend();
   }
 
-  private initializeTransporter() {
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+  private initializeResend() {
+    const apiKey = process.env.RESEND_API_KEY;
+    this.fromEmail = process.env.DEFAULT_FROM_EMAIL || 'contact@layq.store';
 
-    // Check if we have real SMTP credentials
-    if (smtpHost && smtpUser && smtpPass) {
-      try {
-        this.transporter = nodemailer.createTransport({
-          host: smtpHost,
-          port: smtpPort,
-          secure: smtpSecure,
-          auth: {
-            user: smtpUser,
-            pass: smtpPass,
-          },
-        });
-        this.useRealEmail = true;
-        this.logger.log(
-          `📧 Real email service initialized with SMTP provider: ${smtpHost}:${smtpPort} (secure: ${smtpSecure})`
-        );
-        // Test the connection
-        this.testSMTPConnection();
-      } catch (error) {
-        this.logger.warn(
-          '⚠️ Failed to initialize real email service, falling back to mock'
-        );
-        this.useRealEmail = false;
-        console.log(error);
-      }
-    } else {
-      this.logger.log(
-        '📧 Mock email service initialized (no real SMTP credentials)'
+    if (!apiKey) {
+      this.logger.warn(
+        '⚠️ RESEND_API_KEY is not configured, email sending will be mocked'
       );
-      this.useRealEmail = false;
+      return;
     }
-  }
-
-  private async testSMTPConnection() {
-    if (!this.transporter) return;
 
     try {
-      await this.transporter.verify();
-      console.log('✅ SMTP connection verified successfully!');
-      this.logger.log('✅ SMTP connection verified successfully!');
+      this.resend = new Resend(apiKey);
+      this.logger.log('✅ Resend email service initialized successfully');
+      this.logger.log(`📧 Sending from: Layq <${this.fromEmail}>`);
     } catch (error) {
-      console.error('❌ SMTP connection failed:', error);
-      this.logger.error('❌ SMTP connection failed:');
-      this.logger.error('Full error:', error);
-
-      if (error instanceof Error) {
-        console.error('Error message:', error.message);
-        console.error('Error name:', error.name);
-        console.error('Error stack:', error.stack);
-        this.logger.error('Error message:', error.message);
-        this.logger.error('Error name:', error.name);
-      } else {
-        console.error('Error (not Error instance):', error);
-        this.logger.error('Error (not Error instance):', String(error));
-      }
-
-      this.useRealEmail = false;
+      this.logger.error('❌ Failed to initialize Resend service');
+      this.logger.error(error);
     }
   }
 
@@ -83,14 +37,11 @@ export class EmailService {
     verificationToken: string
   ): Promise<void> {
     const verificationUrl = `${process.env.CLIENT_BASE_URL}/verify-email?token=${verificationToken}`;
-    const defaultEmail = process.env.DEFAULT_FROM_EMAIL || 'noreply@store.com';
-    const fromEmail = `Layq <${defaultEmail}>`;
 
-    if (this.useRealEmail && this.transporter) {
-      // Send real email
+    if (this.resend) {
       try {
-        const mailOptions = {
-          from: fromEmail,
+        await this.resend.emails.send({
+          from: `Layq <${this.fromEmail}>`,
           to: email,
           subject: 'Verify your email address',
           html: `
@@ -111,10 +62,9 @@ export class EmailService {
               <p>Best regards,<br>Your Store Team</p>
             </div>
           `,
-        };
+        });
 
         this.logger.log(`📧 Sending REAL verification email to: ${email}`);
-        await this.transporter.sendMail(mailOptions);
         this.logger.log(
           `✅ REAL verification email sent successfully to ${email}`
         );
@@ -123,24 +73,20 @@ export class EmailService {
           `❌ Failed to send real email to ${email}, falling back to mock:`
         );
         this.logger.error(
-          `❌ SMTP Error Details:`,
+          `❌ Resend Error Details:`,
           error instanceof Error ? error.message : error
         );
-        this.sendMockVerificationEmail(email, verificationUrl, fromEmail);
+        this.sendMockVerificationEmail(email, verificationUrl);
       }
     } else {
       // Send mock email
-      this.sendMockVerificationEmail(email, verificationUrl, fromEmail);
+      this.sendMockVerificationEmail(email, verificationUrl);
     }
   }
 
-  private sendMockVerificationEmail(
-    email: string,
-    verificationUrl: string,
-    fromEmail: string
-  ) {
+  private sendMockVerificationEmail(email: string, verificationUrl: string) {
     this.logger.log(`📧 MOCK EMAIL SENT`);
-    this.logger.log(`From: ${fromEmail}`);
+    this.logger.log(`From: Layq <${this.fromEmail}>`);
     this.logger.log(`To: ${email}`);
     this.logger.log(`Subject: Verify your email address`);
     this.logger.log(`Verification URL: ${verificationUrl}`);
@@ -154,14 +100,11 @@ export class EmailService {
     resetToken: string
   ): Promise<void> {
     const resetUrl = `${process.env.CLIENT_BASE_URL}/reset-password?token=${resetToken}`;
-    const defaultEmail = process.env.DEFAULT_FROM_EMAIL || 'noreply@store.com';
-    const fromEmail = `Layq <${defaultEmail}>`;
 
-    if (this.useRealEmail && this.transporter) {
-      // Send real email
+    if (this.resend) {
       try {
-        const mailOptions = {
-          from: fromEmail,
+        await this.resend.emails.send({
+          from: `Layq <${this.fromEmail}>`,
           to: email,
           subject: 'Reset your password',
           html: `
@@ -183,10 +126,9 @@ export class EmailService {
               <p>Best regards,<br>Your Store Team</p>
             </div>
           `,
-        };
+        });
 
         this.logger.log(`📧 Sending REAL password reset email to: ${email}`);
-        await this.transporter.sendMail(mailOptions);
         this.logger.log(
           `✅ REAL password reset email sent successfully to ${email}`
         );
@@ -195,24 +137,20 @@ export class EmailService {
           `❌ Failed to send real email to ${email}, falling back to mock:`
         );
         this.logger.error(
-          `❌ SMTP Error Details:`,
+          `❌ Resend Error Details:`,
           error instanceof Error ? error.message : error
         );
-        this.sendMockPasswordResetEmail(email, resetUrl, fromEmail);
+        this.sendMockPasswordResetEmail(email, resetUrl);
       }
     } else {
       // Send mock email
-      this.sendMockPasswordResetEmail(email, resetUrl, fromEmail);
+      this.sendMockPasswordResetEmail(email, resetUrl);
     }
   }
 
-  private sendMockPasswordResetEmail(
-    email: string,
-    resetUrl: string,
-    fromEmail: string
-  ) {
+  private sendMockPasswordResetEmail(email: string, resetUrl: string) {
     this.logger.log(`📧 MOCK PASSWORD RESET EMAIL SENT`);
-    this.logger.log(`From: ${fromEmail}`);
+    this.logger.log(`From: Layq <${this.fromEmail}>`);
     this.logger.log(`To: ${email}`);
     this.logger.log(`Subject: Reset your password`);
     this.logger.log(`Reset URL: ${resetUrl}`);
