@@ -263,12 +263,17 @@ export class AuthController {
     if (userType === 'owner') {
       // For owners, fetch their store directly
       try {
-        const store = await this.storeService.findStoreByOwnerId(user.id);
-        if (store) {
-          storeName = store.name;
-          this.logger.log(
-            `Found store "${storeName}" for owner user: ${user.email}`
-          );
+        const hasStore = await this.storeService.checkOwnerHasStore(user.id);
+        if (hasStore) {
+          const store = await this.storeService.findStoreByOwnerId(user.id);
+          if (store) {
+            storeName = store.name;
+            this.logger.log(
+              `Found store "${storeName}" for owner user: ${user.email}`
+            );
+          }
+        } else {
+          this.logger.log(`Owner user ${user.email} does not have a store yet`);
         }
       } catch (error) {
         this.logger.error(
@@ -294,13 +299,22 @@ export class AuthController {
               activeEmployee.from_user_id
             );
             if (employer && employer.type === 'owner') {
-              const store = await this.storeService.findStoreByOwnerId(
+              const hasStore = await this.storeService.checkOwnerHasStore(
                 employer.id
               );
-              if (store) {
-                storeName = store.name;
+              if (hasStore) {
+                const store = await this.storeService.findStoreByOwnerId(
+                  employer.id
+                );
+                if (store) {
+                  storeName = store.name;
+                  this.logger.log(
+                    `Found store "${storeName}" for ${userType} user: ${user.email}`
+                  );
+                }
+              } else {
                 this.logger.log(
-                  `Found store "${storeName}" for ${userType} user: ${user.email}`
+                  `Employer for ${userType} user ${user.email} does not have a store yet`
                 );
               }
             }
