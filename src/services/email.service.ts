@@ -56,15 +56,24 @@ export class EmailService {
 
     try {
       await this.transporter.verify();
+      console.log('✅ SMTP connection verified successfully!');
       this.logger.log('✅ SMTP connection verified successfully!');
     } catch (error) {
+      console.error('❌ SMTP connection failed:', error);
       this.logger.error('❌ SMTP connection failed:');
+      this.logger.error('Full error:', error);
+
       if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error name:', error.name);
+        console.error('Error stack:', error.stack);
         this.logger.error('Error message:', error.message);
-        this.logger.error('Error code:', error as any);
+        this.logger.error('Error name:', error.name);
       } else {
-        this.logger.error('Error details:', JSON.stringify(error));
+        console.error('Error (not Error instance):', error);
+        this.logger.error('Error (not Error instance):', String(error));
       }
+
       this.useRealEmail = false;
     }
   }
