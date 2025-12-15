@@ -608,14 +608,14 @@ export class ProductService {
 
   // Check if a product with the same code exists in any of the given branches
   async productExistsInBranch(
-    product_code: string,
-    branchIds: string[]
+    product_code: string
+    // branchIds: string[]
   ): Promise<boolean> {
-    if (!branchIds || branchIds.length === 0) return false;
+    // if (!branchIds || branchIds.length === 0) return false;
     const count = await this.productBranchRepository
       .createQueryBuilder('pb')
       .where('pb.product_code = :product_code', { product_code })
-      .andWhere('pb.branch_id IN (:...branchIds)', { branchIds })
+      // .andWhere('pb.branch_id IN (:...branchIds)', { branchIds })
       .getCount();
     return count > 0;
   }

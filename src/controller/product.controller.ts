@@ -121,14 +121,7 @@ export class ProductController implements OnModuleInit {
         []
       );
 
-      this.logger.log(dto.tags, 'sssssssssssssssss000');
       createProductDto.tags = FormDataHelper.parseIfJSON(dto.tags, {});
-      this.logger.log(
-        dto.tags,
-        'sssssssssssssssss',
-        createProductDto.tags,
-        '444'
-      );
 
       // Handle product images if uploaded
       const imageUrls: string[] = [];
@@ -155,15 +148,15 @@ export class ProductController implements OnModuleInit {
 
       // Validate product code uniqueness within the same branch
       const exists = await this.productService.productExistsInBranch(
-        createProductDto.product_code,
-        createProductDto.branchIds
+        createProductDto.product_code
+        // createProductDto.branchIds
       );
       this.logger.log(
         createProductDto.product_code,
         'exists in branch:',
         exists
       );
-      if (exists && createProductDto.product_code !== undefined) {
+      if (exists) {
         throw new BadRequestException(
           'Product with this code already exists in this branch'
         );
@@ -222,7 +215,6 @@ export class ProductController implements OnModuleInit {
 
     // Handle URL decoding for category parameter
     let processedCategory = category;
-    console.log('111111111111111111111x2');
     if (category) {
       try {
         console.log('Decoding category:', category);
@@ -408,7 +400,6 @@ export class ProductController implements OnModuleInit {
         );
       }
     }
-    console.log('111111111111111111111x4');
 
     return await this.productService.findAll(
       limit ? +limit : 10,
