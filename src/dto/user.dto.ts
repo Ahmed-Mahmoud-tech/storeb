@@ -18,7 +18,11 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
-  phone?: string;
+  country_code?: string; // e.g., "+20", "+966"
+
+  @IsOptional()
+  @IsString()
+  phone?: string; // phone number without country code
 
   @IsEnum(['owner', 'employee', 'manager', 'client', 'sales'])
   type!: 'owner' | 'employee' | 'manager' | 'client' | 'sales';
@@ -99,7 +103,11 @@ export class RegisterWithEmailDto {
 
   @IsOptional()
   @IsString()
-  phone?: string;
+  country_code?: string; // e.g., "+20", "+966"
+
+  @IsOptional()
+  @IsString()
+  phone?: string; // phone number without country code
 }
 
 export class LoginWithEmailDto {

@@ -92,7 +92,21 @@ export class UserService {
    */
   async createUser(createUserDto: CreateUserDto): Promise<User> {
     this.logger.log(`Creating user with email: ${createUserDto.email}`);
-    const user = this.userRepository.create(createUserDto);
+    
+    // Handle phone splitting if needed
+    let userData = { ...createUserDto };
+    
+    if (userData.phone) {
+      // If country_code is also provided, use phone as-is (they're separated)
+      if (!userData.country_code) {
+        // If only phone is provided, parse it to extract country code
+        const { countryCode, phone } = this.parsePhoneNumber(userData.phone);
+        userData.phone = phone;
+        userData.country_code = countryCode;
+      }
+    }
+    
+    const user = this.userRepository.create(userData);
     try {
       return await this.userRepository.save(user);
     } catch {
@@ -268,13 +282,28 @@ export class UserService {
     const verificationExpires = new Date();
     verificationExpires.setHours(verificationExpires.getHours() + 24); // 24 hours
 
+    // Handle phone splitting if provided
+    let phoneData = {
+      phone: registerDto.phone,
+      country_code: registerDto.country_code,
+    };
+
+    if (registerDto.phone && !registerDto.country_code) {
+      // Parse phone to extract country code if not provided
+      const { countryCode, phone } = this.parsePhoneNumber(
+        registerDto.phone
+      );
+      phoneData = { phone, country_code: countryCode };
+    }
+
     // Create user
     const user = this.userRepository.create({
       name: registerDto.name,
       email: registerDto.email,
       password: hashedPassword,
       type: registerDto.type,
-      phone: registerDto.phone,
+      phone: phoneData.phone,
+      country_code: phoneData.country_code,
       email_verified: false,
       verification_token: verificationToken,
       verification_token_expires: verificationExpires,
