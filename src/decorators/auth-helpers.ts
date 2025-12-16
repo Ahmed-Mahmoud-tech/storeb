@@ -164,6 +164,7 @@ export async function canActivate(
 ): Promise<boolean> {
   const { roles, user, storeId, branchId, storeName } = data;
   const { id, type } = user;
+  console.log(branchId, id, type, 'branchId, id, type000000');
 
   if (!user) {
     throw new UnauthorizedException('User not found in request');

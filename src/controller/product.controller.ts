@@ -73,7 +73,7 @@ export class ProductController implements OnModuleInit {
     this.logger.log('DTO received:', dto);
     try {
       await canActivate(this.dataSource, {
-        roles: ['owner', 'manager'],
+        roles: ['owner', 'manager', 'employee'],
         user: req.user as { id: string; type: string },
         branchId: dto.branchIds
           ? Array.isArray(dto.branchIds)
@@ -629,7 +629,7 @@ export class ProductController implements OnModuleInit {
   async remove(@Req() req: Request, @Param('productCode') productCode: string) {
     try {
       await canActivate(this.dataSource, {
-        roles: ['owner', 'manager'],
+        roles: ['owner', 'manager', 'employee'],
         user: req.user as { id: string; type: string },
       });
       await this.productService.remove(productCode);

@@ -35,7 +35,7 @@ export class CustomerProductController {
     @Req() request: Request
   ): Promise<CustomerProduct> {
     await canActivate(this.dataSource, {
-      roles: ['owner', 'manager', 'sales'],
+      roles: ['owner', 'manager', 'sales', 'employee'],
       user: request.user as { id: string; type: string },
       branchId: createDto.branch_id,
     });
@@ -70,7 +70,7 @@ export class CustomerProductController {
     limit: number;
   }> {
     await canActivate(this.dataSource, {
-      roles: ['owner', 'manager', 'sales'],
+      roles: ['owner', 'manager', 'sales', 'employee'],
       user: request.user as { id: string; type: string },
       storeName: storeName,
     });
@@ -139,7 +139,7 @@ export class CustomerProductController {
     @Req() request: Request
   ): Promise<{ message: string }> {
     await canActivate(this.dataSource, {
-      roles: ['owner', 'manager', 'sales'],
+      roles: ['owner', 'manager', 'sales', 'employee'],
       user: request.user as { id: string; type: string },
     });
     await this.customerProductService.remove(id);

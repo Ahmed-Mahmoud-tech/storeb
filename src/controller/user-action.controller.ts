@@ -113,7 +113,7 @@ export class UserActionController {
     @Query() query: GetUserActionsQueryDto
   ) {
     await canActivate(this.dataSource, {
-      roles: ['owner', 'manager', 'sales'],
+      roles: ['owner', 'manager', 'sales', 'employee'],
       user: request.user as { id: string; type: string },
       storeId: storeId,
     });
