@@ -21,6 +21,7 @@ export enum ActionType {
   MAP_OPEN = 'map_open',
   SEARCH = 'search',
   BRANCH_VISIT = 'branch_visit',
+  PRODUCT_SOCIAL_SHARE = 'product_social_share',
 }
 
 @Entity('user_actions')
