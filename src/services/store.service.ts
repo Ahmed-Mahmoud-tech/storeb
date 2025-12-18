@@ -728,7 +728,7 @@ export class StoreService {
       );
       this.logger.error(errorStack);
       // Don't throw - we still want to allow the page to load even if tracking fails
-      throw error;
+      return null;
     }
   }
 
