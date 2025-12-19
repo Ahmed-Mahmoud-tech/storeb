@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, SelectQueryBuilder } from 'typeorm';
+import { v4 as uuid } from 'uuid';
 import { UserAction, ActionType } from '../model/user-actions.model';
 import {
   CreateUserActionDto,
@@ -229,6 +230,7 @@ export class UserActionService {
       }
 
       const userAction = this.userActionRepository.create({
+        id: uuid(), // Explicitly generate UUID for production safety
         user_id: realUserId || null,
         anonymous_user_id: anonymousUserId,
         action_type: createUserActionDto.action_type,
