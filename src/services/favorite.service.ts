@@ -33,7 +33,10 @@ export class FavoriteService {
     console.error(`Creating favorite: ${JSON.stringify(createFavoriteDto)}`);
     this.logger.log(`Creating favorite: ${JSON.stringify(createFavoriteDto)}`);
 
-    const favorite = this.favoriteRepository.create(createFavoriteDto);
+    const favorite = this.favoriteRepository.create({
+      product: createFavoriteDto.product,
+      user_id: createFavoriteDto.user_id,
+    });
     const savedFavorite = await this.favoriteRepository.save(favorite);
 
     console.error(`Favorite saved: ${savedFavorite.id}`);
