@@ -239,6 +239,7 @@ export class UserActionService {
         metadata: createUserActionDto.metadata,
         ip_address: ipAddress,
         user_agent: userAgent,
+        created_at: new Date(), // Explicitly set creation timestamp
       });
 
       console.error(
