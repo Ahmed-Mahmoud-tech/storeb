@@ -7,6 +7,7 @@ import { CreateEmployeeDto, UpdateEmployeeDto } from '../dto/employee.dto';
 import { User } from '../model/users.model';
 import { Branch } from '../model/branches.model';
 import { Store } from '../model/store.model';
+import { v4 as uuid } from 'uuid';
 
 @Injectable()
 export class EmployeeService {
@@ -102,7 +103,10 @@ export class EmployeeService {
     const { branches, ...employeeData } = createEmployeeDto;
 
     // Create and save employee record
-    const employee = this.employeeRepository.create(employeeData);
+    const employee = this.employeeRepository.create({
+      id: uuid(),
+      ...employeeData,
+    });
     const savedEmployee = await this.employeeRepository.save(employee);
 
     // Create employee-branch relationships if branches are provided
