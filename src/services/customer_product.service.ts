@@ -8,6 +8,7 @@ import {
 } from '../dto/customer_product.dto';
 import { ProductService } from './product.service';
 import { Product } from '../model/product.model';
+import { v4 as uuid } from 'uuid';
 
 @Injectable()
 export class CustomerProductService {
@@ -22,6 +23,7 @@ export class CustomerProductService {
     this.logger.log('Creating customer product');
     // employee field is now required
     const entity = this.customerProductRepository.create({
+      id: uuid(),
       phone: createDto.phone,
       countryCode: createDto.countryCode,
       product_code: createDto.product_code,

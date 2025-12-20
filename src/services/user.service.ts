@@ -92,10 +92,10 @@ export class UserService {
    */
   async createUser(createUserDto: CreateUserDto): Promise<User> {
     this.logger.log(`Creating user with email: ${createUserDto.email}`);
-    
+
     // Handle phone splitting if needed
-    let userData = { ...createUserDto };
-    
+    const userData = { ...createUserDto };
+
     if (userData.phone) {
       // If country_code is also provided, use phone as-is (they're separated)
       if (!userData.country_code) {
@@ -105,7 +105,7 @@ export class UserService {
         userData.country_code = countryCode;
       }
     }
-    
+
     const user = this.userRepository.create(userData);
     try {
       return await this.userRepository.save(user);
@@ -190,7 +190,7 @@ export class UserService {
       if (updateUserDto.name) {
         user.name = updateUserDto.name;
       }
-      
+
       // Handle phone update
       if (updateUserDto.phone) {
         // If country_code is also provided, use phone as-is (they're separated)
@@ -205,12 +205,12 @@ export class UserService {
           user.country_code = countryCode;
         }
       }
-      
+
       // Handle country_code update - this overrides any parsed country_code above
       if (updateUserDto.country_code) {
         user.country_code = updateUserDto.country_code;
       }
-      
+
       if (updateUserDto.type) {
         user.type = updateUserDto.type;
       }
@@ -290,9 +290,7 @@ export class UserService {
 
     if (registerDto.phone && !registerDto.country_code) {
       // Parse phone to extract country code if not provided
-      const { countryCode, phone } = this.parsePhoneNumber(
-        registerDto.phone
-      );
+      const { countryCode, phone } = this.parsePhoneNumber(registerDto.phone);
       phoneData = { phone, country_code: countryCode };
     }
 
