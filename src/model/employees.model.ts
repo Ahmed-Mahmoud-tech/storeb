@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -8,7 +8,7 @@ import {
 
 @Entity('employees')
 export class Employee {
-  @PrimaryColumn({ type: 'uuid', default: () => 'uuid_generate_v4()' })
+  @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ type: 'uuid', nullable: false })

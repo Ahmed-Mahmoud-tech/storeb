@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -11,7 +11,7 @@ import { Store } from './store.model';
 
 @Entity('branches')
 export class Branch {
-  @PrimaryColumn({ type: 'uuid', default: () => 'uuid_generate_v4()' })
+  @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ type: 'uuid', nullable: false })

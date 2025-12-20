@@ -1,14 +1,14 @@
 import {
   Entity,
   Column,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 @Entity('user')
 export class User {
-  @PrimaryColumn({ type: 'uuid', default: () => 'uuid_generate_v4()' })
+  @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ type: 'varchar', length: 100, nullable: false })

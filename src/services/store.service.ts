@@ -1,7 +1,6 @@
 import { Logger, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { v4 as uuid } from 'uuid';
 import { Store } from '../model/store.model';
 import { Branch } from '../model/branches.model';
 import { Product } from '../model/product.model';
@@ -167,33 +166,23 @@ export class StoreService {
         });
       }
 
-      // Use raw SQL for proper JSONB handling
-      const id = uuid();
-      const jsonPayload = customerSupportData
-        ? JSON.stringify(customerSupportData)
-        : null;
+      // Create branch entity with TypeORM
+      const branch = new Branch();
+      branch.store_id = storeId;
+      branch.name = branchDto.name;
+      branch.address = branchDto.coordinates.address;
+      branch.lat = branchDto.coordinates.lat.toString();
+      branch.lang = branchDto.coordinates.lng.toString();
+      branch.is_online = branchDto.is_online ?? true;
+      branch.customer_support = customerSupportData;
 
       this.logger.debug(
-        `Creating branch ${id} with JSONB payload: ${jsonPayload}`
+        `Creating branch with data: ${JSON.stringify(branchDto)}`
       );
 
-      const result = await this.branchRepository.query(
-        `INSERT INTO branches (id, store_id, name, address, lat, lang, is_online, customer_support, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW(), NOW())
-         RETURNING *`,
-        [
-          id,
-          storeId,
-          branchDto.name,
-          branchDto.coordinates.address,
-          branchDto.coordinates.lat.toString(),
-          branchDto.coordinates.lng.toString(),
-          branchDto.is_online ?? true,
-          jsonPayload,
-        ]
-      );
-
-      return (result as Branch[])[0];
+      // Save using TypeORM which will auto-generate the ID
+      const savedBranch = await this.branchRepository.save(branch);
+      return savedBranch;
     } catch (error) {
       this.logger.error(`Error creating branch for store ${storeId}:`, error);
       throw error;

@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   ManyToOne,
@@ -11,7 +11,7 @@ import { Product } from './product.model';
 
 @Entity('favorite')
 export class Favorite {
-  @PrimaryColumn({ type: 'uuid', default: () => 'uuid_generate_v4()' })
+  @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ type: 'varchar', length: 50 })

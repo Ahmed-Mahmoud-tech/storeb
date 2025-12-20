@@ -1,6 +1,6 @@
 import {
   Entity,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -8,7 +8,7 @@ import {
 
 @Entity('store')
 export class Store {
-  @PrimaryColumn({ type: 'uuid', default: () => 'uuid_generate_v4()' })
+  @PrimaryGeneratedColumn('uuid')
   id!: string;
   @Column('text', { array: true, nullable: true, default: [] })
   type!: string[];
