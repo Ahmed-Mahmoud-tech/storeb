@@ -564,7 +564,7 @@ export class EmployeeService {
         .createQueryBuilder('branch')
         .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
         .where('branch.store_id = :storeId', { storeId })
-        .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
+        // .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
         .getMany();
 
       console.log(branchesInStorex, '8888888888888888888888888888888888888');
