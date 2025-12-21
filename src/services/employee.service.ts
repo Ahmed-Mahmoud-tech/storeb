@@ -128,32 +128,11 @@ export class EmployeeService {
   ): Promise<void> {
     // Create employee-branch relations
     for (const branchId of branchIds) {
-      try {
-        const employeeBranch = new EmployeeBranch();
-        employeeBranch.employee_id = employeeId;
-        employeeBranch.branch_id = branchId;
-        this.logger.log(
-          `Attempting to save employeeBranch: ${JSON.stringify(employeeBranch)}`
-        );
-
-        const saveResult =
-          await this.employeeBranchRepository.save(employeeBranch);
-        this.logger.log(
-          `Saved employeeBranch result: ${JSON.stringify(saveResult)}`
-        );
-        if (!saveResult) {
-          this.logger.error(
-            `Save did not return a valid result for employeeBranch: ${JSON.stringify(employeeBranch)}`
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Error creating employee-branch relation for employee ID ${employeeId} and branch ID ${branchId}: ${
-            error instanceof Error ? error.message : 'unknown error'
-          }`,
-          error instanceof Error ? error.stack : undefined
-        );
-      }
+      const employeeBranch = new EmployeeBranch();
+      employeeBranch.employee_id = employeeId;
+      employeeBranch.branch_id = branchId;
+      employeeBranch.id = uuid();
+      await this.employeeBranchRepository.save(employeeBranch);
     }
   }
 
