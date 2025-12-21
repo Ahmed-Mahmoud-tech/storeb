@@ -567,7 +567,7 @@ export class EmployeeService {
         .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
         .getMany();
 
-      console.log(branchesInStorex);
+      console.log(branchesInStorex, '8888888888888888888888888888888888888');
 
       // Check if this employee has access to any branch of this store
       // by querying employee_branches and checking if any belong to this store
