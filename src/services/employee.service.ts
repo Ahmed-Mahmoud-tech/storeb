@@ -560,6 +560,15 @@ export class EmployeeService {
         return false;
       }
 
+      const branchesInStorex = await this.branchRepository
+        .createQueryBuilder('branch')
+        .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
+        .where('branch.store_id = :storeId', { storeId })
+        .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
+        .getMany();
+
+      console.log(branchesInStorex);
+
       // Check if this employee has access to any branch of this store
       // by querying employee_branches and checking if any belong to this store
       const branchesInStore = await this.branchRepository
