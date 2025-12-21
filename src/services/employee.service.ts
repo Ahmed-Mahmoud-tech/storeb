@@ -108,7 +108,6 @@ export class EmployeeService {
       ...employeeData,
     });
     const savedEmployee = await this.employeeRepository.save(employee);
-    console.log(savedEmployee.id, branches, '999999999999999999999999');
 
     // Create employee-branch relationships if branches are provided
     if (branches && branches.length > 0) {
@@ -129,10 +128,20 @@ export class EmployeeService {
   ): Promise<void> {
     // Create employee-branch relations
     for (const branchId of branchIds) {
-      const employeeBranch = new EmployeeBranch();
-      employeeBranch.employee_id = employeeId;
-      employeeBranch.branch_id = branchId;
-      await this.employeeBranchRepository.save(employeeBranch);
+      try {
+        const employeeBranch = new EmployeeBranch();
+        employeeBranch.employee_id = employeeId;
+        employeeBranch.branch_id = branchId;
+        console.log(employeeBranch, '999999999999999999999999');
+
+        await this.employeeBranchRepository.save(employeeBranch);
+      } catch (error) {
+        this.logger.error(
+          `Error creating employee-branch relation for employee ID ${employeeId} and branch ID ${branchId}: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`
+        );
+      }
     }
   }
 
