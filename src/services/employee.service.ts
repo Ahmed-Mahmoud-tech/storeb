@@ -108,6 +108,7 @@ export class EmployeeService {
       ...employeeData,
     });
     const savedEmployee = await this.employeeRepository.save(employee);
+    console.log(savedEmployee.id, branches, '999999999999999999999999');
 
     // Create employee-branch relationships if branches are provided
     if (branches && branches.length > 0) {
@@ -559,15 +560,6 @@ export class EmployeeService {
       if (!employee) {
         return false;
       }
-
-      const branchesInStorex = await this.branchRepository
-        .createQueryBuilder('branch')
-        .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
-        .where('branch.store_id = :storeId', { storeId })
-        // .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
-        .getMany();
-
-      console.log(branchesInStorex, '8888888888888888888888888888888888888');
 
       // Check if this employee has access to any branch of this store
       // by querying employee_branches and checking if any belong to this store
