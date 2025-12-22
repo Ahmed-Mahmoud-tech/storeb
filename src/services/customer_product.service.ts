@@ -62,17 +62,39 @@ export class CustomerProductService {
     if (search && searchType) {
       switch (searchType) {
         case 'product':
-          // Search by product_code as it's stored in customer_products
-          // Use array containment operator with ANY to search within array values
-          queryBuilder.andWhere(
-            `EXISTS (
-            SELECT 1 FROM unnest(customerProduct.product_code) AS p 
-            WHERE p LIKE :searchPattern
-          )`,
-            {
-              searchPattern: `%${search}%`,
-            }
-          );
+          // Search by both product_code and product_name
+          // First, get all products matching the search term (name or code)
+          const matchingProducts = await this.productService.findByProductNameOrCode(search);
+          const matchingProductCodes = matchingProducts.map((p) => p.product_code);
+          
+          // Combine with direct product_code search
+          const searchPattern = `%${search}%`;
+          if (matchingProductCodes.length > 0) {
+            queryBuilder.andWhere(
+              `(EXISTS (
+                SELECT 1 FROM unnest(customerProduct.product_code) AS p 
+                WHERE p LIKE :searchPattern
+              ) OR EXISTS (
+                SELECT 1 FROM unnest(customerProduct.product_code) AS p 
+                WHERE p IN (:...productCodes)
+              ))`,
+              {
+                searchPattern,
+                productCodes: matchingProductCodes,
+              }
+            );
+          } else {
+            // If no matching products by name, just search by code
+            queryBuilder.andWhere(
+              `EXISTS (
+              SELECT 1 FROM unnest(customerProduct.product_code) AS p 
+              WHERE p LIKE :searchPattern
+            )`,
+              {
+                searchPattern,
+              }
+            );
+          }
           break;
         case 'phone':
           // Search by phone and optionally filter by country code

@@ -412,6 +412,22 @@ export class ProductService {
     });
   }
 
+  async findByProductNameOrCode(searchTerm: string): Promise<Product[]> {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return [];
+    }
+
+    return this.productRepository
+      .createQueryBuilder('product')
+      .where('product.product_code LIKE :searchTerm', {
+        searchTerm: `%${searchTerm}%`,
+      })
+      .orWhere('product.product_name LIKE :searchTerm', {
+        searchTerm: `%${searchTerm}%`,
+      })
+      .getMany();
+  }
+
   async findProductBranches(product_code: string): Promise<string[]> {
     const productBranches = await this.productBranchRepository.find({
       where: { product_code: product_code },
