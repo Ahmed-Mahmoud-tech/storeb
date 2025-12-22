@@ -600,12 +600,7 @@ export class ProductService {
 
     // First delete any favorites referencing this product
     try {
-      // Using raw query to delete favorites by product code
-      const favoriteRepo = this.productRepository.manager;
-      await favoriteRepo.query('DELETE FROM favorite WHERE product = $1', [
-        product_code,
-      ]);
-      this.logger.log(`Deleted favorites for product: ${product_code}`);
+      await this.favoriteService.removeByProductCode(product_code);
     } catch (error) {
       this.logger.error('Error deleting favorites:', error);
       // Continue with deletion even if this fails as the main delete might still work

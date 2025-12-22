@@ -331,4 +331,17 @@ export class FavoriteService {
       limit,
     };
   }
+
+  // Remove all favorites for a deleted product
+  async removeByProductCode(product_code: string): Promise<void> {
+    this.logger.log(
+      `Removing all favorites for deleted product: ${product_code}`
+    );
+    const result = await this.favoriteRepository.delete({
+      product: product_code,
+    });
+    this.logger.log(
+      `Deleted ${result.affected} favorite(s) for product: ${product_code}`
+    );
+  }
 }
