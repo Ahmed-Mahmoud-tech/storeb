@@ -64,9 +64,12 @@ export class CustomerProductService {
         case 'product':
           // Search by both product_code and product_name
           // First, get all products matching the search term (name or code)
-          const matchingProducts = await this.productService.findByProductNameOrCode(search);
-          const matchingProductCodes = matchingProducts.map((p) => p.product_code);
-          
+          const matchingProducts =
+            await this.productService.findByProductNameOrCode(search);
+          const matchingProductCodes = matchingProducts.map(
+            (p) => p.product_code
+          );
+
           // Combine with direct product_code search
           const searchPattern = `%${search}%`;
           if (matchingProductCodes.length > 0) {
