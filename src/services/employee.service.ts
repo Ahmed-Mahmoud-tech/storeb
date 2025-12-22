@@ -565,8 +565,21 @@ export class EmployeeService {
 
       // Check if user is staff (employee/manager/sales person)
       // by checking if they have an employee record with branches in this store
+
+      const branchesInStorex = await this.branchRepository
+        .createQueryBuilder('branch')
+        .select('COUNT(branch.id)', 'count')
+        .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
+        .innerJoin('employee', 'e', 'e.id = eb.employee_id')
+        .where('branch.store_id = :storeId', { storeId })
+        // .andWhere('e.to_user_id = :userId', { userId })
+        .getMany();
+
+      console.log(branchesInStorex, '444444444444444444444444444444444444444');
+
       const branchesInStore = await this.branchRepository
         .createQueryBuilder('branch')
+        .select('COUNT(branch.id)', 'count')
         .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
         .innerJoin('employee', 'e', 'e.id = eb.employee_id')
         .where('branch.store_id = :storeId', { storeId })
