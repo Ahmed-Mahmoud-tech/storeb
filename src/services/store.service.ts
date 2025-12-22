@@ -10,6 +10,7 @@ import { CreateStoreDto } from '../dto/store.dto';
 import { CreateBranchDto } from '../dto/branch.dto';
 import { FileUploadService } from './file-upload.service';
 import { UserActionService } from './user-action.service';
+import { ProductService } from './product.service';
 import { ActionType } from '../model/user-actions.model';
 
 @Injectable()
@@ -26,7 +27,8 @@ export class StoreService {
     @InjectRepository(ProductBranch)
     private productBranchRepository: Repository<ProductBranch>,
     private fileUploadService: FileUploadService,
-    private userActionService: UserActionService
+    private userActionService: UserActionService,
+    private productService: ProductService
   ) {}
 
   /**
@@ -524,6 +526,9 @@ export class StoreService {
     // First check if branch exists - validates that it exists
     const branch = await this.findBranchById(id);
 
+    // Get the store_id for this branch
+    const storeId = branch.store_id;
+
     // Find all products associated with this branch
     const productBranches = await this.productBranchRepository.find({
       where: { branch_id: id },
@@ -540,42 +545,11 @@ export class StoreService {
       // If the product only exists in this branch, delete it
       if (totalBranchCount === 1) {
         try {
-          // First delete any favorites referencing this product
-          const favoriteRepo = this.productRepository.manager;
-          await favoriteRepo.query('DELETE FROM favorite WHERE product = $1', [
-            pb.product_code,
-          ]);
-
-          // Then delete the product-branch relationships
-          await this.productBranchRepository.delete({
-            product_code: pb.product_code,
-          });
-
-          // Finally delete the product
-          const product = await this.productRepository.findOne({
-            where: { product_code: pb.product_code },
-          });
-          if (product) {
-            // Delete all product images before deleting the product
-            if (product.images && product.images.length > 0) {
-              for (const imagePath of product.images) {
-                try {
-                  this.fileUploadService.deleteFile(imagePath);
-                } catch (imageError) {
-                  this.logger.warn(
-                    `Failed to delete image ${imagePath} for product ${pb.product_code}:`,
-                    imageError
-                  );
-                  // Continue deleting other images even if one fails
-                }
-              }
-            }
-
-            await this.productRepository.remove(product);
-            this.logger.log(
-              `Product ${pb.product_code} deleted (no other branches have it)`
-            );
-          }
+          // Use ProductService to delete the product (handles favorites, images, etc.)
+          await this.productService.remove(pb.product_code);
+          this.logger.log(
+            `Product ${pb.product_code} deleted (no other branches have it)`
+          );
         } catch (error) {
           this.logger.error(
             `Error deleting product ${pb.product_code}:`,
@@ -588,6 +562,88 @@ export class StoreService {
 
     // Delete the product-branch relationship for this branch
     await this.productBranchRepository.delete({ branch_id: id });
+
+    // Delete customer_products records associated with this branch
+    try {
+      await this.branchRepository.manager.query(
+        'DELETE FROM customer_products WHERE branch_id = $1',
+        [id]
+      );
+      this.logger.log(`Customer product records deleted for branch ${id}`);
+    } catch (error) {
+      this.logger.error(
+        `Error deleting customer products for branch ${id}:`,
+        error
+      );
+      // Continue with branch deletion even if this fails
+    }
+
+    // Handle employee cleanup
+    try {
+      // Find all employees assigned to this branch
+      const employeeBranches: Array<{ employee_id: string }> =
+        await this.branchRepository.manager
+          .createQueryBuilder()
+          .select('employee_branches.*')
+          .from('employee_branches', 'employee_branches')
+          .where('employee_branches.branch_id = :branchId', { branchId: id })
+          .getRawMany();
+
+      // For each employee assigned to this branch
+      for (const empBranch of employeeBranches) {
+        const employeeId = empBranch.employee_id;
+
+        // Check if this employee is assigned to other branches in the same store
+        const otherBranchesCount: { count: string } | undefined =
+          await this.branchRepository.manager
+            .createQueryBuilder()
+            .select('COUNT(DISTINCT branch.id)', 'count')
+            .from('branches', 'branch')
+            .innerJoin(
+              'employee_branches',
+              'emp_branch',
+              'branch.id = emp_branch.branch_id'
+            )
+            .where('branch.store_id = :storeId', { storeId })
+            .andWhere('emp_branch.employee_id = :employeeId', { employeeId })
+            .andWhere('branch.id != :branchId', { branchId: id })
+            .getRawOne();
+
+        const hasOtherBranches =
+          parseInt(otherBranchesCount?.count || '0', 10) > 0;
+
+        if (!hasOtherBranches) {
+          // Delete the employee if they have no other branches in this store
+          try {
+            await this.branchRepository.manager.query(
+              'DELETE FROM employees WHERE id = $1',
+              [employeeId]
+            );
+            this.logger.log(
+              `Employee ${employeeId} deleted (no other branches in store ${storeId})`
+            );
+          } catch (deleteError) {
+            this.logger.error(
+              `Error deleting employee ${employeeId}:`,
+              deleteError
+            );
+          }
+        }
+      }
+
+      // Delete all employee_branches records for this branch
+      await this.branchRepository.manager.query(
+        'DELETE FROM employee_branches WHERE branch_id = $1',
+        [id]
+      );
+      this.logger.log(`Employee-branch associations deleted for branch ${id}`);
+    } catch (error) {
+      this.logger.error(
+        `Error handling employee cleanup for branch ${id}:`,
+        error
+      );
+      // Continue with branch deletion even if employee cleanup fails
+    }
 
     // Delete the branch
     await this.branchRepository.delete(id);
