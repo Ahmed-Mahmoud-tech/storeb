@@ -21,7 +21,9 @@ export class EmployeeService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(Branch)
-    private branchRepository: Repository<Branch>
+    private branchRepository: Repository<Branch>,
+    @InjectRepository(Store)
+    private storeRepository: Repository<Store>
   ) {}
 
   /**
@@ -541,10 +543,10 @@ export class EmployeeService {
   }
 
   /**
-   * Check if a user is staff (manager, sales person) of a specific store
+   * Check if a user is staff (manager, sales person, owner) of a specific store
    * @param userId - The user ID to check
    * @param storeId - The store ID to check against
-   * @returns true if user is staff of the store, false otherwise
+   * @returns true if user is staff/owner of the store, false otherwise
    */
   async isUserStaffOfStore(userId: string, storeId: string): Promise<boolean> {
     if (!userId || !storeId) {
@@ -552,22 +554,23 @@ export class EmployeeService {
     }
 
     try {
-      // Check if user has an employee record
-      const employee = await this.employeeRepository.findOne({
-        where: { to_user_id: userId },
+      // Check if user is the store owner
+      const store = await this.storeRepository.findOne({
+        where: { id: storeId },
       });
 
-      if (!employee) {
-        return false;
+      if (store && store.owner_id === userId) {
+        return true;
       }
 
-      // Check if this employee has access to any branch of this store
-      // by querying employee_branches and checking if any belong to this store
+      // Check if user is staff (employee/manager/sales person)
+      // by checking if they have an employee record with branches in this store
       const branchesInStore = await this.branchRepository
         .createQueryBuilder('branch')
         .innerJoin('employee_branches', 'eb', 'eb.branch_id = branch.id')
+        .innerJoin('employee', 'e', 'e.id = eb.employee_id')
         .where('branch.store_id = :storeId', { storeId })
-        .andWhere('eb.employee_id = :employeeId', { employeeId: employee.id })
+        .andWhere('e.to_user_id = :userId', { userId })
         .getCount();
 
       return branchesInStore > 0;
