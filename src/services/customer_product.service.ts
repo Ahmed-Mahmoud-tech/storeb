@@ -61,8 +61,8 @@ export class CustomerProductService {
 
     if (search && searchType) {
       switch (searchType) {
-        case 'product':
-          // Search by both product_code and product_name
+        case 'product': {
+          // Search by both product_code and product_name (case-insensitive)
           // First, get all products matching the search term (name or code)
           const matchingProducts =
             await this.productService.findByProductNameOrCode(search);
@@ -76,7 +76,7 @@ export class CustomerProductService {
             queryBuilder.andWhere(
               `(EXISTS (
                 SELECT 1 FROM unnest(customerProduct.product_code) AS p 
-                WHERE p LIKE :searchPattern
+                WHERE LOWER(p) LIKE LOWER(:searchPattern)
               ) OR EXISTS (
                 SELECT 1 FROM unnest(customerProduct.product_code) AS p 
                 WHERE p IN (:...productCodes)
@@ -91,7 +91,7 @@ export class CustomerProductService {
             queryBuilder.andWhere(
               `EXISTS (
               SELECT 1 FROM unnest(customerProduct.product_code) AS p 
-              WHERE p LIKE :searchPattern
+              WHERE LOWER(p) LIKE LOWER(:searchPattern)
             )`,
               {
                 searchPattern,
@@ -99,7 +99,8 @@ export class CustomerProductService {
             );
           }
           break;
-        case 'phone':
+        }
+        case 'phone': {
           // Search by phone and optionally filter by country code
           if (countryCode) {
             // If country code is provided, match both country code and phone number
@@ -119,11 +120,14 @@ export class CustomerProductService {
             });
           }
           break;
-        case 'employee':
-          queryBuilder.andWhere('employee.name LIKE :search', {
+        }
+        case 'employee': {
+          // Search by employee name (case-insensitive)
+          queryBuilder.andWhere('LOWER(employee.name) LIKE LOWER(:search)', {
             search: `%${search}%`,
           });
           break;
+        }
       }
     }
 

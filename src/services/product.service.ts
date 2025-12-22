@@ -419,10 +419,10 @@ export class ProductService {
 
     return this.productRepository
       .createQueryBuilder('product')
-      .where('product.product_code LIKE :searchTerm', {
+      .where('LOWER(product.product_code) LIKE LOWER(:searchTerm)', {
         searchTerm: `%${searchTerm}%`,
       })
-      .orWhere('product.product_name LIKE :searchTerm', {
+      .orWhere('LOWER(product.product_name) LIKE LOWER(:searchTerm)', {
         searchTerm: `%${searchTerm}%`,
       })
       .getMany();
