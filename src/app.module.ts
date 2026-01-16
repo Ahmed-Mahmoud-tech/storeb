@@ -54,7 +54,9 @@ import 'winston-daily-rotate-file';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const isProduction = configService.get('NODE_ENV') === 'production';
+        const isProduction =
+          configService.get('NODE_ENV') === 'production' ||
+          configService.get('NODE_ENV') === 'staging';
 
         return {
           type: 'postgres',

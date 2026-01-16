@@ -370,7 +370,9 @@ export class AuthController {
     // Clear the auth cookie
     res.clearCookie('auth_token', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure:
+        process.env.NODE_ENV === 'production' ||
+        process.env.NODE_ENV === 'staging',
       path: '/',
     });
 
