@@ -11,6 +11,7 @@ import { CreateBranchDto } from '../dto/branch.dto';
 import { FileUploadService } from './file-upload.service';
 import { UserActionService } from './user-action.service';
 import { ProductService } from './product.service';
+import { PaymentService } from './payment.service';
 import { ActionType } from '../model/user-actions.model';
 
 @Injectable()
@@ -28,7 +29,8 @@ export class StoreService {
     private productBranchRepository: Repository<ProductBranch>,
     private fileUploadService: FileUploadService,
     private userActionService: UserActionService,
-    private productService: ProductService
+    private productService: ProductService,
+    private paymentService: PaymentService
   ) {}
 
   /**
@@ -138,6 +140,20 @@ export class StoreService {
     if (branches && branches.length > 0) {
       await this.createBranches(savedStore.id, branches);
     }
+
+    // Create default payment/subscription plan (uses env vars: PRODUCT_UNIT / DEFAULT_MONTH_COUNT months / is_paid = true)
+    try {
+      await this.paymentService.createDefaultPayment(
+        ownerId,
+        savedStore.id,
+        storeName
+      );
+      this.logger.log(`Default payment created for store: ${storeName}`);
+    } catch (error) {
+      this.logger.error(`Error creating default payment: ${error}`);
+      // Don't throw - payment creation is not critical for store creation
+    }
+
     return savedStore;
   }
 

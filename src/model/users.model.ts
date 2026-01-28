@@ -53,4 +53,7 @@ export class User {
 
   @UpdateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   updated_at!: Date;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  credit!: number;
 }

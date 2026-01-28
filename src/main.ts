@@ -17,7 +17,7 @@ async function bootstrap() {
   app.useWebSocketAdapter(new IoAdapter(app));
 
   // Use Winston logger
-  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  // app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
 
   // Create uploads directory if it doesn't exist
   const uploadDir = join(process.cwd(), 'uploads');

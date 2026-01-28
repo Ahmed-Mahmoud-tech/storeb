@@ -630,4 +630,37 @@ export class ProductService {
       .getCount();
     return count > 0;
   }
+
+  /**
+   * Get product count for a store
+   */
+  async getProductCountByStore(storeId: string): Promise<number> {
+    const count = await this.productRepository
+      .createQueryBuilder('p')
+      .innerJoin('product_branches', 'pb', 'p.product_code = pb.product_code')
+      .innerJoin('branches', 'b', 'pb.branch_id = b.id')
+      .where('b.store_id = :storeId', { storeId })
+      .distinct(true)
+      .select('COUNT(DISTINCT p.product_code)', 'count')
+      .getRawOne();
+
+    return parseInt(count?.count || '0', 10);
+  }
+
+  /**
+   * Get product count for a store by store name
+   */
+  async getProductCountByStoreName(storeName: string): Promise<number> {
+    const count = await this.productRepository
+      .createQueryBuilder('p')
+      .innerJoin('product_branches', 'pb', 'p.product_code = pb.product_code')
+      .innerJoin('branches', 'b', 'pb.branch_id = b.id')
+      .innerJoin('store', 's', 'b.store_id = s.id')
+      .where('s.name = :storeName', { storeName })
+      .distinct(true)
+      .select('COUNT(DISTINCT p.product_code)', 'count')
+      .getRawOne();
+
+    return parseInt(count?.count || '0', 10);
+  }
 }
