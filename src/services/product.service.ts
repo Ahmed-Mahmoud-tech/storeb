@@ -644,7 +644,7 @@ export class ProductService {
       .select('COUNT(DISTINCT p.product_code)', 'count')
       .getRawOne();
 
-    return parseInt(count?.count || '0', 10);
+    return parseInt((count as { count: string })?.count || '0', 10);
   }
 
   /**
@@ -661,6 +661,6 @@ export class ProductService {
       .select('COUNT(DISTINCT p.product_code)', 'count')
       .getRawOne();
 
-    return parseInt(count?.count || '0', 10);
+    return parseInt((count as { count: string })?.count || '0', 10);
   }
 }

@@ -42,6 +42,9 @@ import { UserActionController } from './controller/user-action.controller';
 import { Payment } from './model/payment.model';
 import { PaymentService } from './services/payment.service';
 import { PaymentController } from './controller/payment.controller';
+import { SubscriptionRequest } from './model/subscription_request.model';
+import { SubscriptionRequestService } from './services/subscription_request.service';
+import { SubscriptionRequestController } from './controller/subscription_request.controller';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
@@ -81,9 +84,12 @@ import 'winston-daily-rotate-file';
             Favorite,
             UserAction,
             Payment,
+            SubscriptionRequest,
           ],
-          synchronize: !isProduction, // Auto-create tables only in development
-          logging: false, // Disable SQL logging completely
+          synchronize: false, // Disable synchronize to use migrations
+          migrations: ['dist/migrations/*.js'], // Path to migrations
+          migrationsRun: true, // Run migrations automatically
+          logging: true, // Enable SQL logging for debugging
           maxQueryExecutionTime: 1000, // Log only slow queries (above 1000ms)
           uuidExtension: 'pgcrypto', // Use PostgreSQL 13+ native UUID
           ssl: isProduction
@@ -123,6 +129,7 @@ import 'winston-daily-rotate-file';
       Favorite,
       UserAction,
       Payment,
+      SubscriptionRequest,
     ]),
     PassportModule.register({ defaultStrategy: 'google' }),
     JwtModule.register({
@@ -188,6 +195,7 @@ import 'winston-daily-rotate-file';
     FavoriteController,
     UserActionController,
     PaymentController,
+    SubscriptionRequestController,
   ],
   providers: [
     AppService,
@@ -204,6 +212,7 @@ import 'winston-daily-rotate-file';
     FavoriteService,
     UserActionService,
     PaymentService,
+    SubscriptionRequestService,
     EmployeeNotificationsGateway,
   ],
 })

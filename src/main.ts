@@ -6,11 +6,10 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { join } from 'path';
 import * as fs from 'fs';
 import * as cookieParser from 'cookie-parser';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: false, // Disable default logger
+    logger: ['error', 'warn', 'log', 'debug', 'verbose'], // Enable logging
   });
 
   // Use WebSocket adapter for Socket.io
