@@ -182,16 +182,22 @@ export class SubscriptionRequestService {
 
         const userCredit = Number(user.credit) || 0;
         const netCost = Number(request.net_cost);
+        const priceDifference = Number(request.price_difference);
 
-        // Check if user has enough credit for the upgrade
-        if (userCredit < netCost) {
-          throw new BadRequestException(
-            'User does not have sufficient credit for this upgrade'
-          );
+        // Handle credit updates based on request type
+        if (request.request_type === SubscriptionRequestType.UPGRADE) {
+          if (userCredit < netCost) {
+            user.credit = 0;
+          } else {
+            user.credit = userCredit - netCost;
+          }
+        } else if (request.request_type === SubscriptionRequestType.DOWNGRADE) {
+          user.credit = userCredit - priceDifference;
+        } else {
+          // For renewal and new subscriptions
+          user.credit = userCredit - netCost;
         }
 
-        // Deduct credit from user
-        user.credit = userCredit - netCost;
         await queryRunner.manager.save(User, user);
 
         // Create new payment record
