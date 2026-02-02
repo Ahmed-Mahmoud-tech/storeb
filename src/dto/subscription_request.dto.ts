@@ -6,6 +6,7 @@ import {
   Min,
   Max,
   IsEnum,
+  IsISO8601,
 } from 'class-validator';
 import { SubscriptionRequestStatus } from '../model/subscription_request.model';
 
@@ -22,10 +23,9 @@ export class CreateSubscriptionRequestDto {
   @Min(1)
   new_product_limit: number;
 
-  @IsInt()
-  @Min(1)
-  @Max(12)
-  new_month_count: number;
+  @IsNotEmpty()
+  @IsISO8601()
+  expiry_date: string; // ISO 8601 format date (plan expires on this date)
 
   @IsOptional()
   @IsString()

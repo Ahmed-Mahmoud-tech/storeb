@@ -45,10 +45,27 @@ export class SubscriptionRequestController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: CreateSubscriptionRequestDto
   ) {
-    this.logger.log(
-      `User ${req.user.id} creating subscription request for store ${dto.store_name}`
-    );
-    return this.subscriptionRequestService.createRequest(req.user.id, dto);
+    try {
+      console.log('🔵 [CONTROLLER] POST /subscription-requests - Auth passed');
+      console.log('🔵 [CONTROLLER] User ID:', req?.user?.id);
+      console.log('🔵 [CONTROLLER] Request DTO:', dto);
+
+      this.logger.log(
+        `User ${req.user.id} creating subscription request for store ${dto.store_name}`
+      );
+      return this.subscriptionRequestService.createRequest(req.user.id, dto);
+    } catch (error) {
+      console.error(
+        '🔴 [CONTROLLER] Error in createRequest:',
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack,
+            }
+          : String(error)
+      );
+      throw error;
+    }
   }
 
   /**
@@ -101,9 +118,19 @@ export class SubscriptionRequestController {
   @Get('store/:storeId/pending')
   @UseGuards(JwtAuthGuard)
   async findPendingByStore(@Param('storeId') storeId: string) {
-    const result =
-      await this.subscriptionRequestService.findPendingByStore(storeId);
-    return result || null; // Explicitly return null if no pending request
+    try {
+      this.logger.log(`Getting pending request for store: ${storeId}`);
+      const result =
+        await this.subscriptionRequestService.findPendingByStore(storeId);
+      this.logger.log(`Pending request result: ${result ? 'found' : 'none'}`);
+      return result || null; // Explicitly return null if no pending request
+    } catch (error) {
+      this.logger.error(
+        `Error getting pending request for store ${storeId}:`,
+        error instanceof Error ? error.stack : String(error)
+      );
+      throw error;
+    }
   }
 
   /**

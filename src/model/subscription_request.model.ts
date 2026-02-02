@@ -41,8 +41,11 @@ export class SubscriptionRequest {
   @Column({ type: 'int', nullable: true })
   current_product_limit: number;
 
-  @Column({ type: 'int', nullable: true })
-  current_month_count: number;
+  @Column({ type: 'timestamptz', nullable: true })
+  current_start_date: Date;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  current_end_date: Date;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   current_total_price: number;
@@ -51,11 +54,18 @@ export class SubscriptionRequest {
   @Column({ type: 'int' })
   requested_product_limit: number;
 
-  @Column({ type: 'int' })
-  requested_month_count: number;
+  @Column({ type: 'timestamptz' })
+  requested_start_date: Date;
+
+  @Column({ type: 'timestamptz' })
+  requested_end_date: Date;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   requested_total_price: number;
+
+  // Legacy field: store number of days (migration from month-based to day-based billing)
+  @Column({ type: 'int', nullable: true })
+  requested_month_count: number;
 
   // Financial calculations
   @Column({ type: 'decimal', precision: 10, scale: 2 })
