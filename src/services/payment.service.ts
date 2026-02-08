@@ -153,13 +153,15 @@ export class PaymentService {
 
   /**
    * Get active payment for a store
+   * IMPORTANT: Returns the latest paid payment for display as current plan
+   * Orders by updated_at DESC to get the most recently modified/created payment
    */
   async findActivePaymentByStore(
     storeId: string
   ): Promise<PaymentResponseDto | null> {
     const payment = await this.paymentRepository.findOne({
       where: { store_id: storeId },
-      order: { start_date: 'DESC' },
+      order: { updated_at: 'DESC' },
       relations: ['user', 'store'],
     });
 
@@ -639,7 +641,7 @@ export class PaymentService {
   }
 
   /**
-   * Format payment response
+   * Format payment response - dates are already at midnight UTC
    */
   private formatPaymentResponse(payment: Payment): PaymentResponseDto {
     return {

@@ -39,10 +39,10 @@ export class Payment {
   @Column({ type: 'timestamptz', nullable: true })
   payment_date?: Date;
 
-  @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
+  @Column({ type: 'date' })
   start_date!: Date;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({ type: 'date', nullable: true })
   expiry_date?: Date;
 
   @Column({ type: 'text', nullable: true })

@@ -37,10 +37,15 @@ export class SubscriptionRequestService {
 
   /**
    * Calculate days from today to expiry date
+   * Both dates are normalized to midnight for accurate day counting
    */
   private getDaysUntilExpiry(expiryDate: Date): number {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+
     const diffTime = expiry.getTime() - today.getTime();
     const days = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
     return days;
@@ -74,24 +79,44 @@ export class SubscriptionRequestService {
 
   /**
    * Calculate unused value from current subscription (prorated refund)
+   * Formula: daily_rate * remaining_days
+   * This is the refund value for days not yet used in the current plan
    */
   private calculateUnusedValue(
     currentPayment: Payment,
     currentDate: Date = new Date()
   ): number {
-    const originalExpiryDate = new Date(currentPayment.expiry_date);
+    const today = new Date(currentDate);
+    today.setHours(0, 0, 0, 0);
 
-    if (originalExpiryDate <= currentDate) {
+    const originalExpiryDate = new Date(currentPayment.expiry_date);
+    originalExpiryDate.setHours(0, 0, 0, 0);
+
+    if (originalExpiryDate <= today) {
+      console.log('🔵 UNUSED VALUE CALC: Plan already expired, returning 0');
       return 0; // Plan already expired
     }
 
     // Calculate remaining days in current plan
     const remainingDays = this.getDaysUntilExpiry(originalExpiryDate);
 
-    // Calculate daily rate for current plan
+    // Calculate daily rate for current plan based on product limit
     const dailyRate = this.getDailyPrice(currentPayment.product_limit);
 
-    return Math.round(dailyRate * remainingDays * 100) / 100;
+    // Calculate unused value: daily_rate * remaining_days
+    const unusedValue = Math.round(dailyRate * remainingDays * 100) / 100;
+
+    console.log('🔵 UNUSED VALUE CALC:', {
+      currentProductLimit: currentPayment.product_limit,
+      currentExpiryDate: currentPayment.expiry_date,
+      today: today.toISOString().split('T')[0],
+      remainingDays,
+      dailyRate: dailyRate.toFixed(4),
+      calculatedUnusedValue: unusedValue,
+      formula: `${dailyRate.toFixed(4)} × ${remainingDays} days = ${unusedValue}`,
+    });
+
+    return unusedValue;
   }
 
   async createRequest(userId: string, dto: CreateSubscriptionRequestDto) {
@@ -133,7 +158,7 @@ export class SubscriptionRequestService {
         .createQueryBuilder(Payment, 'payment')
         .where('payment.store_id = :store_id', { store_id: dto.store_id })
         .andWhere('payment.is_paid = :is_paid', { is_paid: true })
-        .orderBy('payment.start_date', 'DESC')
+        .orderBy('payment.updated_at', 'DESC')
         .take(1)
         .getOne();
 
@@ -156,7 +181,11 @@ export class SubscriptionRequestService {
         'products until',
         expiryDate
       );
-      let requestedPriceCalc;
+      let requestedPriceCalc: {
+        days: number;
+        dailyPrice: number;
+        totalPrice: number;
+      };
       try {
         requestedPriceCalc = this.calculateDayBasedPrice(
           dto.new_product_limit,
@@ -177,9 +206,28 @@ export class SubscriptionRequestService {
 
       if (currentPayment) {
         currentProductLimit = Number(currentPayment.product_limit) || 50;
-        currentTotalPrice = Number(currentPayment.total_price) || 0;
 
-        console.log('🔵 [7] CALCULATING UNUSED VALUE for expired plan');
+        // IMPORTANT: Recalculate current plan price using same formula as SubscriptionPlan (matching reference)
+        // This ensures current_total_price matches what the frontend calculates
+        const currentPriceCalc = this.calculateDayBasedPrice(
+          currentProductLimit,
+          currentPayment.expiry_date
+        );
+        currentTotalPrice = currentPriceCalc.totalPrice;
+
+        console.log(
+          '🔵 [7] RECALCULATED CURRENT PLAN PRICE (matching SubscriptionPlan formula):',
+          {
+            productLimit: currentProductLimit,
+            expiryDate: currentPayment.expiry_date,
+            daysRemaining: currentPriceCalc.days,
+            dailyRate: currentPriceCalc.dailyPrice,
+            recalculatedPrice: currentTotalPrice,
+            originalStoredPrice: Number(currentPayment.total_price) || 0,
+          }
+        );
+
+        console.log('🔵 [7.5] CALCULATING UNUSED VALUE for expired plan');
         try {
           // Calculate unused value (prorated)
           if (currentPayment.expiry_date) {
@@ -197,6 +245,14 @@ export class SubscriptionRequestService {
         totalPrice: currentTotalPrice,
         unusedValue,
       });
+
+      // Get user credit from user table
+      const user = await queryRunner.manager.findOne(User, {
+        where: { id: userId },
+      });
+
+      const userCredit = Number(user?.credit) || 0;
+      console.log('🔵 [9.5] USER CREDIT:', userCredit);
 
       // Determine request type
       let requestType = SubscriptionRequestType.NEW;
@@ -219,17 +275,42 @@ export class SubscriptionRequestService {
       console.log('🔵 [10] REQUEST TYPE:', requestType);
 
       // Calculate price difference and net cost
+      // price_difference: requested_price - current_price (positive for upgrade, negative for downgrade)
       const priceDifference = requestedPriceCalc.totalPrice - currentTotalPrice;
-      const netCost = Math.max(0, priceDifference - unusedValue);
 
-      console.log('🔵 [11] FINANCIALS:', {
-        priceDifference,
-        netCost,
-      });
+      // Net cost calculation (matching frontend logic):
+      // For upgrade:
+      //   - Available credit = user_credit + unused_value_from_current_plan
+      //   - creditToUse = min(available_credit, price_difference)
+      //   - netCost = max(0, price_difference - creditToUse)
+      // For downgrade/renewal: netCost = 0
+      let netCost = 0;
+      if (priceDifference > 0) {
+        // UPGRADE: Calculate available credit and apply it
+        const totalAvailableCredit = userCredit + unusedValue;
+        const creditToUse = Math.min(totalAvailableCredit, priceDifference);
+        netCost = Math.max(0, priceDifference - creditToUse);
+
+        console.log('🔵 [11] UPGRADE CALCULATION:', {
+          priceDifference,
+          userCredit,
+          unusedValue,
+          totalAvailableCredit,
+          creditToUse,
+          netCost,
+        });
+      } else {
+        // DOWNGRADE or RENEWAL: No payment required
+        console.log('🔵 [11] DOWNGRADE/RENEWAL:', {
+          priceDifference,
+          netCost: 0,
+        });
+      }
 
       // Check if there's already a pending request for this store
-      console.log('🔵 [12] CHECKING FOR EXISTING PENDING REQUEST');
-      const existingRequest = await queryRunner.manager.findOne(
+      // If exists, automatically REJECT it (only one valid request per store)
+      console.log('🔵 [12] CHECKING FOR EXISTING PENDING REQUESTS');
+      const existingRequests = await queryRunner.manager.find(
         SubscriptionRequest,
         {
           where: {
@@ -239,16 +320,30 @@ export class SubscriptionRequestService {
         }
       );
 
-      if (existingRequest) {
-        throw new BadRequestException(
-          'A pending subscription request already exists for this store'
+      if (existingRequests.length > 0) {
+        console.log(
+          '🔵 [12.1] FOUND',
+          existingRequests.length,
+          'EXISTING PENDING REQUEST(S) - AUTO-REJECTING'
         );
+
+        // Auto-reject all existing pending requests
+        for (const oldRequest of existingRequests) {
+          oldRequest.status = SubscriptionRequestStatus.REJECTED;
+          oldRequest.admin_notes = 'Auto-rejected: New request created';
+          oldRequest.processed_by = null; // No admin manually rejected it
+          oldRequest.processed_at = new Date();
+          await queryRunner.manager.save(SubscriptionRequest, oldRequest);
+          console.log('🔵 [12.2] AUTO-REJECTED REQUEST:', oldRequest.id);
+        }
       }
 
-      console.log('🔵 [13] NO EXISTING PENDING REQUEST - PROCEEDING');
+      console.log('🔵 [13] PROCEEDING WITH NEW REQUEST');
 
       // Create the subscription request
+      // Set start date to today at midnight (same as frontend calculation)
       const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
 
       // Calculate days for requested_month_count (legacy field, store as number of days)
       const daysUntilExpiry = Math.ceil(
@@ -262,7 +357,7 @@ export class SubscriptionRequestService {
         current_product_limit: currentPayment?.product_limit || null,
         current_start_date: currentPayment?.start_date || null,
         current_end_date: currentPayment?.expiry_date || null,
-        current_total_price: currentPayment?.total_price || null,
+        current_total_price: currentPayment ? currentTotalPrice : null, // Use recalculated price (matching SubscriptionPlan formula)
         requested_product_limit: dto.new_product_limit,
         requested_start_date: startDate,
         requested_end_date: expiryDate,
@@ -355,21 +450,42 @@ export class SubscriptionRequestService {
           throw new NotFoundException('User not found');
         }
 
-        const userCredit = Number(user.credit) || 0;
-        const unusedValue = Number(request.remaining_credit_value) || 0;
-        const requestedPrice = Number(request.requested_total_price);
+        // Credit Calculation Logic when accepting payment request
+        // a = user credit (existing account balance)
+        // b = remaining_credit_value (price of remainder of current plan)
+        // c = requested_total_price (new request plan price)
+        //
+        // Formula: new_credit = a + b - c
+        // If (a + b - c) > 0: user credit = a + b - c
+        // If (a + b - c) <= 0: user credit = 0
+        //
+        // NOTE: Decimal columns from PostgreSQL need parseFloat conversion
+        const userCredit = parseFloat(String(user.credit || 0)); // a
+        const remainingPlanValue = parseFloat(
+          String(request.remaining_credit_value || 0)
+        ); // b
+        const newRequestPrice = parseFloat(
+          String(request.requested_total_price || 0)
+        ); // c
 
-        // Calculate actual payment required
-        let creditApplied = 0;
-        let paymentRequired = 0;
+        console.log('🔵 CREDIT CALCULATION DEBUG:', {
+          a_userCredit: userCredit,
+          b_remainingPlanValue: remainingPlanValue,
+          c_newRequestPrice: newRequestPrice,
+          formula: `${userCredit} + ${remainingPlanValue} - ${newRequestPrice} = ${userCredit + remainingPlanValue - newRequestPrice}`,
+        });
 
-        // First apply unused value from current plan
-        const totalAvailableCredit = userCredit + unusedValue;
-        creditApplied = Math.min(totalAvailableCredit, requestedPrice);
-        paymentRequired = Math.max(0, requestedPrice - totalAvailableCredit);
+        // Calculate new credit: a + b - c
+        const calculatedCredit =
+          userCredit + remainingPlanValue - newRequestPrice;
+        const newCredit = Math.round(Math.max(0, calculatedCredit) * 100) / 100;
 
-        // Update user credit
-        user.credit = Math.max(0, totalAvailableCredit - requestedPrice);
+        console.log('🔵 CREDIT UPDATE RESULT:', {
+          calculatedCredit: calculatedCredit,
+          finalCredit: newCredit,
+        });
+
+        user.credit = newCredit;
 
         await queryRunner.manager.save(User, user);
 
@@ -391,32 +507,46 @@ export class SubscriptionRequestService {
           payment_date: new Date(),
           start_date: startDate,
           expiry_date: endDate,
-          notes: `Created from subscription request ${request.id}. Credit Applied: £${creditApplied.toFixed(2)}, Payment Required: £${paymentRequired.toFixed(2)}`,
+          notes: `Created from subscription request ${request.id}. User Credit (a): £${userCredit.toFixed(2)}, Remaining Plan Value (b): £${remainingPlanValue.toFixed(2)}, New Request Price (c): £${newRequestPrice.toFixed(2)}, Final Credit: £${newCredit.toFixed(2)}`,
         });
 
         await queryRunner.manager.save(Payment, newPayment);
 
-        // If there was a previous payment, mark it as unpaid (expired)
-        const currentPayment = await queryRunner.manager.find(Payment, {
-          where: { store_id: request.store_id, is_paid: true },
-          order: { start_date: 'DESC' },
-          take: 2,
-        });
+        // // If there was a previous payment, mark it as unpaid (expired)
+        // const currentPayment = await queryRunner.manager.find(Payment, {
+        //   where: { store_id: request.store_id, is_paid: true },
+        //   order: { updated_at: 'DESC' },
+        //   take: 2,
+        // });
 
-        if (currentPayment.length > 1) {
-          const previousPayment = currentPayment[1];
-          previousPayment.is_paid = false;
-          await queryRunner.manager.save(Payment, previousPayment);
-        }
+        // if (currentPayment.length > 1) {
+        //   const previousPayment = currentPayment[1];
+        //   previousPayment.is_paid = false;
+        //   await queryRunner.manager.save(Payment, previousPayment);
+        // }
       }
 
       const updatedRequest = await queryRunner.manager.save(
         SubscriptionRequest,
         request
       );
+
+      // Reload user to get updated credit
+      const updatedUser = await queryRunner.manager.findOne(User, {
+        where: { id: request.user_id },
+      });
+
       await queryRunner.commitTransaction();
 
-      return this.formatResponse(updatedRequest);
+      const response = this.formatResponse(updatedRequest);
+      // Include updated user credit in response
+      if (updatedUser) {
+        response.user = {
+          ...response.user,
+          credit: parseFloat(String(updatedUser.credit || 0)),
+        };
+      }
+      return response;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -552,6 +682,7 @@ export class SubscriptionRequestService {
               id: request.user.id,
               email: request.user.email,
               name: request.user.name,
+              credit: request.user.credit, // Include user credit for payment breakdown display
             }
           : undefined,
         store: {

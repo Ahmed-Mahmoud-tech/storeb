@@ -91,6 +91,23 @@ export class PaymentController {
   }
 
   /**
+   * Get active/latest payment for a store (alias for above)
+   * GET /payments/active/:storeId
+   */
+  @Get('active/:storeId')
+  async getActivePayment(
+    @Param('storeId') storeId: string
+  ): Promise<PaymentResponseDto | { message: string }> {
+    const payment = await this.paymentService.findActivePaymentByStore(storeId);
+
+    if (!payment) {
+      return { message: 'No active payment found for this store' };
+    }
+
+    return payment;
+  }
+
+  /**
    * Get payment by ID
    * GET /payments/:id
    */
