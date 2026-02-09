@@ -96,6 +96,29 @@ export class PaymentController {
    */
   @Get('active/:storeId')
   /**
+   * Check if a store's plan has expired
+   * GET /payments/check-expiry/:storeIdOrName
+   * Returns { isExpired: boolean, expiryDate?: Date }
+   */
+  @Get('check-expiry/:storeIdOrName')
+  async checkPlanExpiry(
+    @Param('storeIdOrName') storeIdOrName: string
+  ): Promise<{ isExpired: boolean; expiryDate?: Date | null }> {
+    const payment =
+      await this.paymentService.findActivePaymentByStore(storeIdOrName);
+
+    if (!payment || !payment.expiry_date) {
+      return { isExpired: true, expiryDate: null };
+    }
+
+    const now = new Date();
+    const expiryDate = new Date(payment.expiry_date);
+    const isExpired = expiryDate < now;
+
+    return { isExpired, expiryDate };
+  }
+
+  /**
    * Get active/latest payment for a store
    * GET /payments/active/:storeIdOrName
    * Accepts either store UUID or store name
