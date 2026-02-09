@@ -94,16 +94,19 @@ export class PaymentController {
    * Get active/latest payment for a store (alias for above)
    * GET /payments/active/:storeId
    */
-  @Get('active/:storeId')
+  // @Get('active/:storeId')
   /**
    * Check if a store's plan has expired
    * GET /payments/check-expiry/:storeIdOrName
    * Returns { isExpired: boolean, expiryDate?: Date }
    */
-  @Get('check-expiry/:storeIdOrName')
+  // @Get('check-expiry/:storeIdOrName')
+  @Get('active/:storeIdOrName')
   async checkPlanExpiry(
     @Param('storeIdOrName') storeIdOrName: string
   ): Promise<{ isExpired: boolean; expiryDate?: Date | null }> {
+    console.log('xxxxxxxxxxxxxxxxxxxxxxx', storeIdOrName);
+
     const payment =
       await this.paymentService.findActivePaymentByStore(storeIdOrName);
 

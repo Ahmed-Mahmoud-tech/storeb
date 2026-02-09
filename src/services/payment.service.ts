@@ -163,6 +163,8 @@ export class PaymentService {
     const uuidRegex =
       /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
     let payment;
+    console.log(storeIdOrName, '444444444444555555555555');
+
     if (uuidRegex.test(storeIdOrName)) {
       payment = await this.paymentRepository.findOne({
         where: { store_id: storeIdOrName },
