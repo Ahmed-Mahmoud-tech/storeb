@@ -30,6 +30,7 @@ import { createFileFieldsInterceptor } from '../interceptors/file-upload.interce
 import { FormDataParserInterceptor } from '../interceptors/form-data-parser.interceptor';
 import { FormDataHelper } from '../utils/form-data.helper';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { ProductQuotaGuard } from 'src/auth/product-quota.guard';
 import { canActivate } from 'src/decorators/auth-helpers';
 import { DataSource } from 'typeorm';
 
@@ -57,7 +58,7 @@ export class ProductController implements OnModuleInit {
    *
    * POST /products
    */ @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ProductQuotaGuard)
   @UseInterceptors(
     FormDataParserInterceptor,
     createFileFieldsInterceptor([{ name: 'images', maxCount: 3 }])

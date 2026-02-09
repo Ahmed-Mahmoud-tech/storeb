@@ -157,18 +157,28 @@ export class PaymentService {
    * Orders by updated_at DESC to get the most recently modified/created payment
    */
   async findActivePaymentByStore(
-    storeId: string
+    storeIdOrName: string
   ): Promise<PaymentResponseDto | null> {
-    const payment = await this.paymentRepository.findOne({
-      where: { store_id: storeId },
-      order: { updated_at: 'DESC' },
-      relations: ['user', 'store'],
-    });
-
+    // Check if input is a valid UUID
+    const uuidRegex =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    let payment;
+    if (uuidRegex.test(storeIdOrName)) {
+      payment = await this.paymentRepository.findOne({
+        where: { store_id: storeIdOrName },
+        order: { updated_at: 'DESC' },
+        relations: ['user', 'store'],
+      });
+    } else {
+      payment = await this.paymentRepository.findOne({
+        where: { store_name: storeIdOrName },
+        order: { updated_at: 'DESC' },
+        relations: ['user', 'store'],
+      });
+    }
     if (!payment) {
       return null;
     }
-
     return this.formatPaymentResponse(payment);
   }
 
@@ -206,33 +216,47 @@ export class PaymentService {
   async canCreateProduct(
     storeId: string,
     currentProductCount: number
-  ): Promise<{ allowed: boolean; message?: string }> {
+  ): Promise<{
+    allowed: boolean;
+    messageKey?: string;
+    params?: Record<string, any>;
+  }> {
     const payment = await this.findActivePaymentByStore(storeId);
 
     if (!payment) {
+      this.logger.warn(`No active payment found for store: ${storeId}`);
       return {
         allowed: false,
-        message: 'No active subscription plan found',
+        messageKey: 'noActiveSubscriptionPlan',
       };
     }
 
+    this.logger.log(
+      `Payment found for store ${storeId}: product_limit=${payment.product_limit}, currentCount=${currentProductCount}`
+    );
+
     // Check if plan is expired
     if (this.isPlanExpired(payment.expiry_date)) {
+      this.logger.warn(`Plan expired for store ${storeId}`);
       return {
         allowed: false,
-        message:
-          'Your subscription plan has expired. Please upgrade your plan.',
+        messageKey: 'subscriptionPlanExpired',
       };
     }
 
     // Check product limit
     if (currentProductCount >= payment.product_limit) {
+      this.logger.warn(
+        `Product limit reached for store ${storeId}: current=${currentProductCount}, limit=${payment.product_limit}`
+      );
       return {
         allowed: false,
-        message: `You have reached your product limit of ${payment.product_limit}. Upgrade your plan to add more products.`,
+        messageKey: 'productLimitReached',
+        params: { limit: payment.product_limit },
       };
     }
 
+    this.logger.log(`Product creation allowed for store ${storeId}`);
     return { allowed: true };
   }
 
