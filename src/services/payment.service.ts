@@ -45,6 +45,15 @@ export class PaymentService {
     return units * BASE_PRICE * monthCount;
   }
 
+  private normalizeDate(date: Date): string {
+    return new Intl.DateTimeFormat('sv-SE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .format(date)
+      .replace('T', ' '); // Replace T with space if it appears
+  }
   /**
    * Create a new payment/subscription plan
    */
@@ -86,9 +95,11 @@ export class PaymentService {
     const finalPrice = totalPrice - creditApplied;
     const isPaid = finalPrice === 0;
 
-    // Calculate expiry date
-    const startDate = new Date();
-    const expiryDate = addMonths(startDate, createPaymentDto.month_count);
+    // Calculate expiry date (set to midnight UTC - no time component)
+    const startDate = this.normalizeToMidnightUTC(new Date());
+    const expiryDate = this.normalizeToMidnightUTC(
+      addMonths(startDate, createPaymentDto.month_count)
+    );
 
     // Create payment record
     const payment = this.paymentRepository.create({
@@ -162,7 +173,7 @@ export class PaymentService {
     // Check if input is a valid UUID
     const uuidRegex =
       /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    let payment;
+    let payment: Payment | null = null;
     console.log(storeIdOrName, '444444444444555555555555');
 
     if (uuidRegex.test(storeIdOrName)) {
@@ -198,18 +209,24 @@ export class PaymentService {
   }
 
   /**
-   * Check if plan is expired
+   * Check if plan is expired (use UTC midnight comparison)
    */
   isPlanExpired(expiryDate: Date): boolean {
-    return new Date() > expiryDate;
+    const today = this.normalizeToMidnightUTC(new Date());
+    const normalized = this.normalizeToMidnightUTC(new Date(expiryDate));
+    return today > normalized;
   }
 
   /**
    * Check if plan is expired beyond grace period (1 month)
    */
   isExpiredBeyondGracePeriod(expiryDate: Date): boolean {
-    const gracePeriodEnd = addMonths(expiryDate, 1);
-    return new Date() > gracePeriodEnd;
+    const normalized = this.normalizeToMidnightUTC(new Date(expiryDate));
+    const gracePeriodEnd = this.normalizeToMidnightUTC(
+      addMonths(normalized, 1)
+    );
+    const today = this.normalizeToMidnightUTC(new Date());
+    return today > gracePeriodEnd;
   }
 
   /**
@@ -238,7 +255,7 @@ export class PaymentService {
     );
 
     // Check if plan is expired
-    if (this.isPlanExpired(payment.expiry_date)) {
+    if (this.isPlanExpired(new Date(payment.expiry_date))) {
       this.logger.warn(`Plan expired for store ${storeId}`);
       return {
         allowed: false,
@@ -272,14 +289,15 @@ export class PaymentService {
     startDate: Date,
     expiryDate: Date
   ): number {
-    const now = new Date();
+    const now = this.normalizeToMidnightUTC(new Date());
+    const normalized = this.normalizeToMidnightUTC(new Date(expiryDate));
 
     // If already expired, no remaining value
-    if (now >= expiryDate) {
+    if (now >= normalized) {
       return 0;
     }
 
-    const totalDuration = expiryDate.getTime() - startDate.getTime();
+    const totalDuration = normalized.getTime() - startDate.getTime();
     const usedDuration = now.getTime() - startDate.getTime();
 
     // Calculate remaining ratio, but handle edge cases:
@@ -378,12 +396,28 @@ export class PaymentService {
       `Plan change: remainingCredit=${remainingCredit}, newPlanPrice=${newPlanPrice}, netCost=${netCost}, userCredit=${currentCredit}`
     );
 
-    // Update payment record
+    // Update payment record (set dates to midnight UTC - no time component)
+    const newStartDate = this.normalizeToMidnightUTC(new Date());
+    const newExpiryDate = this.normalizeToMidnightUTC(
+      addMonths(newStartDate, newMonthCount)
+    );
+
     payment.product_limit = upgradeDowngradeDto.new_product_limit;
     payment.month_count = newMonthCount;
     payment.total_price = newPlanPrice;
-    payment.start_date = new Date();
-    payment.expiry_date = addMonths(new Date(), newMonthCount);
+    payment.start_date = newStartDate;
+    payment.expiry_date = newExpiryDate;
+
+    console.log(
+      newStartDate,
+      'newStartDate',
+      newExpiryDate,
+      'newExpiryDate',
+      netCost,
+      'netCost',
+      currentCredit,
+      'currentCredit'
+    );
 
     if (netCost > 0) {
       // User needs to pay more - use their credit balance first
@@ -420,216 +454,6 @@ export class PaymentService {
   }
 
   /**
-   * Upgrade or Downgrade payment by Store ID (deprecated - use upgradeOrDowngradeByStoreName)
-   */
-  async upgradeOrDowngradeByStore(
-    storeId: string,
-    upgradeDowngradeDto: UpgradeDowngradePaymentDto,
-    currentProductCount: number
-  ): Promise<PaymentResponseDto> {
-    // Find payment by store_id
-    const payment = await this.paymentRepository.findOne({
-      where: { store_id: storeId },
-      order: { start_date: 'DESC' },
-      relations: ['user'],
-    });
-
-    if (!payment) {
-      throw new HttpException(
-        'Payment not found for this store',
-        HttpStatus.NOT_FOUND
-      );
-    }
-
-    // Get current user for credit updates
-    const user = await this.userRepository.findOne({
-      where: { id: payment.user_id },
-    });
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
-
-    // Validate new product limit is multiple of PRODUCT_UNIT
-    if (upgradeDowngradeDto.new_product_limit % PRODUCT_UNIT !== 0) {
-      throw new HttpException(
-        `Product limit must be a multiple of ${PRODUCT_UNIT}`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    // If downgrading, check that user won't exceed new limit
-    if (upgradeDowngradeDto.new_product_limit < payment.product_limit) {
-      if (currentProductCount > upgradeDowngradeDto.new_product_limit) {
-        throw new HttpException(
-          `Cannot downgrade to ${upgradeDowngradeDto.new_product_limit} products. You currently have ${currentProductCount} products.`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-    }
-
-    // Calculate remaining value of current plan (credit for unused time)
-    const remainingCredit = this.calculateRemainingValue(
-      payment.product_limit,
-      payment.month_count,
-      payment.start_date,
-      payment.expiry_date
-    );
-
-    // Calculate new plan price
-    const newMonthCount =
-      upgradeDowngradeDto.new_month_count || payment.month_count;
-    const newPlanPrice = this.calculateTotalPrice(
-      upgradeDowngradeDto.new_product_limit,
-      newMonthCount
-    );
-
-    // Net cost = new plan price - remaining credit from old plan
-    const netCost = newPlanPrice - remainingCredit;
-
-    // Ensure user.credit is a number (it may come from DB as string)
-    let currentCredit = Number(user.credit) || 0;
-
-    this.logger.log(
-      `Plan change: remainingCredit=${remainingCredit}, newPlanPrice=${newPlanPrice}, netCost=${netCost}, userCredit=${currentCredit}`
-    );
-
-    // Update payment record
-    payment.product_limit = upgradeDowngradeDto.new_product_limit;
-    payment.month_count = newMonthCount;
-    payment.total_price = newPlanPrice;
-    payment.start_date = new Date();
-    payment.expiry_date = addMonths(new Date(), newMonthCount);
-
-    if (netCost > 0) {
-      // User needs to pay more - use their credit balance first
-      const creditToUse = Math.min(currentCredit, netCost);
-      currentCredit = currentCredit - creditToUse;
-      const remainingToPay = netCost - creditToUse;
-      payment.is_paid = remainingToPay === 0;
-
-      this.logger.log(
-        `Upgrade: used ${creditToUse} credit, remaining to pay: ${remainingToPay}`
-      );
-    } else if (netCost < 0) {
-      // User gets a refund (added to credit)
-      currentCredit = currentCredit + Math.abs(netCost);
-      payment.is_paid = true;
-
-      this.logger.log(`Downgrade: added ${Math.abs(netCost)} to user credit`);
-    } else {
-      // No change in cost
-      payment.is_paid = true;
-    }
-
-    // Round to 2 decimal places to avoid floating point issues
-    user.credit = Math.round(currentCredit * 100) / 100;
-
-    await this.userRepository.save(user);
-    const updatedPayment = await this.paymentRepository.save(payment);
-
-    this.logger.log(
-      `Payment for store ${storeId} upgraded/downgraded. Net cost: ${netCost}, New user credit: ${user.credit}`
-    );
-
-    return this.formatPaymentResponse(updatedPayment);
-  }
-
-  /**
-   * Upgrade or Downgrade payment (deprecated - use upgradeOrDowngradeByStore)
-   */
-  async upgradeOrDowngrade(
-    paymentId: string,
-    upgradeDowngradeDto: UpgradeDowngradePaymentDto,
-    currentProductCount: number
-  ): Promise<PaymentResponseDto> {
-    const payment = await this.paymentRepository.findOne({
-      where: { id: paymentId },
-      relations: ['user'],
-    });
-
-    if (!payment) {
-      throw new HttpException('Payment not found', HttpStatus.NOT_FOUND);
-    }
-
-    // Get current user for credit updates
-    const user = await this.userRepository.findOne({
-      where: { id: payment.user_id },
-    });
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
-
-    // Validate new product limit is multiple of PRODUCT_UNIT
-    if (upgradeDowngradeDto.new_product_limit % PRODUCT_UNIT !== 0) {
-      throw new HttpException(
-        `Product limit must be a multiple of ${PRODUCT_UNIT}`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    // If downgrading, check that user won't exceed new limit
-    if (upgradeDowngradeDto.new_product_limit < payment.product_limit) {
-      if (currentProductCount > upgradeDowngradeDto.new_product_limit) {
-        throw new HttpException(
-          `Cannot downgrade to ${upgradeDowngradeDto.new_product_limit} products. You currently have ${currentProductCount} products.`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-    }
-
-    // Calculate old and new prices
-    const oldPrice = this.calculateTotalPrice(
-      payment.product_limit,
-      payment.month_count
-    );
-
-    const newMonthCount =
-      upgradeDowngradeDto.new_month_count || payment.month_count;
-    const newPrice = this.calculateTotalPrice(
-      upgradeDowngradeDto.new_product_limit,
-      newMonthCount
-    );
-
-    const priceDifference = newPrice - oldPrice;
-
-    // Ensure user.credit is a number (it may come from DB as string)
-    let currentCredit = Number(user.credit) || 0;
-
-    // Update payment
-    payment.product_limit = upgradeDowngradeDto.new_product_limit;
-    payment.month_count = newMonthCount;
-    payment.total_price = newPrice;
-    payment.expiry_date = addMonths(new Date(), newMonthCount);
-
-    // If upgrading, deduct from credit or mark as unpaid
-    if (priceDifference > 0) {
-      const creditToUse = Math.min(currentCredit, priceDifference);
-      currentCredit = currentCredit - creditToUse;
-      const remainingDiff = priceDifference - creditToUse;
-      payment.is_paid = remainingDiff === 0;
-    }
-    // If downgrading, add the difference to user credit
-    else if (priceDifference < 0) {
-      currentCredit = currentCredit + Math.abs(priceDifference);
-      payment.is_paid = true; // Downgrade is instantly paid (refund to credit)
-    }
-
-    // Round to 2 decimal places to avoid floating point issues
-    user.credit = Math.round(currentCredit * 100) / 100;
-
-    await this.userRepository.save(user);
-    const updatedPayment = await this.paymentRepository.save(payment);
-
-    this.logger.log(
-      `Payment ${paymentId} upgraded/downgraded. Price difference: ${priceDifference}`
-    );
-
-    return this.formatPaymentResponse(updatedPayment);
-  }
-
-  /**
    * Mark payment as paid
    */
   async markAsPaid(paymentId: string): Promise<PaymentResponseDto> {
@@ -642,7 +466,7 @@ export class PaymentService {
     }
 
     payment.is_paid = true;
-    payment.payment_date = new Date();
+    payment.payment_date = this.normalizeToMidnightUTC(new Date());
     const updatedPayment = await this.paymentRepository.save(payment);
 
     this.logger.log(`Payment ${paymentId} marked as paid`);
@@ -667,10 +491,22 @@ export class PaymentService {
   }
 
   /**
-   * Format payment response - dates are already at midnight UTC
+   * Normalize date to midnight UTC (no time component)
+   */
+  private normalizeToMidnightUTC(date: Date): Date {
+    const normalized = new Date(date);
+    normalized.setUTCHours(0, 0, 0, 0);
+    return normalized;
+  }
+
+  /**
+   * Format payment response - ensures all dates are ISO strings with Z (UTC indicator)
+   * This prevents timezone interpretation issues on the frontend
    */
   private formatPaymentResponse(payment: Payment): PaymentResponseDto {
-    return {
+    console.log(payment.expiry_date, '2222222222222222222222');
+
+    const normalized = {
       id: payment.id,
       user_id: payment.user_id,
       store_id: payment.store_id,
@@ -679,11 +515,18 @@ export class PaymentService {
       month_count: payment.month_count,
       total_price: Number(payment.total_price),
       is_paid: payment.is_paid,
-      payment_date: payment.payment_date,
-      start_date: payment.start_date,
-      expiry_date: payment.expiry_date,
+      payment_date: payment.payment_date
+        ? this.normalizeToMidnightUTC(
+            new Date(payment.payment_date)
+          ).toISOString()
+        : undefined,
+      start_date: this.normalizeDate(new Date(payment.start_date)),
+      expiry_date: this.normalizeDate(new Date(payment.expiry_date)), //this.normalizeDate(new Date(payment.expiry_date)),
       notes: payment.notes,
-      updated_at: payment.updated_at,
+      updated_at: payment.updated_at
+        ? new Date(payment.updated_at).toISOString()
+        : new Date().toISOString(),
     };
+    return normalized as PaymentResponseDto;
   }
 }

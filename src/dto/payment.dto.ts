@@ -96,9 +96,9 @@ export class PaymentResponseDto {
   month_count!: number;
   total_price!: number;
   is_paid!: boolean;
-  payment_date?: Date;
-  start_date!: Date;
-  expiry_date?: Date;
+  payment_date?: string; // ISO string format with Z (UTC)
+  start_date!: string; // ISO string format with Z (UTC)
+  expiry_date?: string; // ISO string format with Z (UTC)
   notes?: string;
-  updated_at!: Date;
+  updated_at!: string; // ISO string format with Z (UTC)
 }

@@ -43,9 +43,12 @@ export class PlanExpiryGuard implements CanActivate {
         return true; // No active payment, let through
       }
 
-      const isExpired = this.paymentService.isPlanExpired(payment.expiry_date);
+      // Convert ISO string to Date for comparison
+      const expiryDateObj = new Date(payment.expiry_date);
+
+      const isExpired = this.paymentService.isPlanExpired(expiryDateObj);
       const isExpiredBeyondGracePeriod =
-        this.paymentService.isExpiredBeyondGracePeriod(payment.expiry_date);
+        this.paymentService.isExpiredBeyondGracePeriod(expiryDateObj);
 
       if (isExpiredBeyondGracePeriod) {
         // Redirect to plan page for public view, throw error for API

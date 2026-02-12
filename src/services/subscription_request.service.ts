@@ -332,7 +332,9 @@ export class SubscriptionRequestService {
           oldRequest.status = SubscriptionRequestStatus.REJECTED;
           oldRequest.admin_notes = 'Auto-rejected: New request created';
           oldRequest.processed_by = null; // No admin manually rejected it
-          oldRequest.processed_at = new Date();
+          const processedAtDate = new Date();
+          processedAtDate.setHours(0, 0, 0, 0);
+          oldRequest.processed_at = processedAtDate;
           await queryRunner.manager.save(SubscriptionRequest, oldRequest);
           console.log('🔵 [12.2] AUTO-REJECTED REQUEST:', oldRequest.id);
         }
@@ -438,7 +440,9 @@ export class SubscriptionRequestService {
       request.status = dto.status;
       request.admin_notes = dto.admin_notes;
       request.processed_by = adminUserId;
-      request.processed_at = new Date();
+      const processedAtDate = new Date();
+      processedAtDate.setHours(0, 0, 0, 0);
+      request.processed_at = processedAtDate;
 
       if (dto.status === SubscriptionRequestStatus.APPROVED) {
         // Get user
@@ -504,7 +508,11 @@ export class SubscriptionRequestService {
           ), // Convert days to approximate months for compatibility
           total_price: request.requested_total_price,
           is_paid: true,
-          payment_date: new Date(),
+          payment_date: (() => {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            return d;
+          })(),
           start_date: startDate,
           expiry_date: endDate,
           notes: `Created from subscription request ${request.id}. User Credit (a): £${userCredit.toFixed(2)}, Remaining Plan Value (b): £${remainingPlanValue.toFixed(2)}, New Request Price (c): £${newRequestPrice.toFixed(2)}, Final Credit: £${newCredit.toFixed(2)}`,
@@ -651,6 +659,24 @@ export class SubscriptionRequestService {
     return { message: 'Request cancelled successfully' };
   }
 
+  /**
+   * Format dates to ISO strings with Z (UTC indicator)
+   * Ensures consistent date handling on the frontend regardless of timezone
+   */
+  /**
+   * Convert date to ISO string with UTC indicator
+   */
+
+  private normalizeDate(date: Date): string {
+    return new Intl.DateTimeFormat('sv-SE', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .format(date)
+      .replace('T', ' '); // Replace T with space if it appears
+  }
+
   private formatResponse(request: SubscriptionRequest) {
     try {
       return {
@@ -659,12 +685,12 @@ export class SubscriptionRequestService {
         store_id: request.store_id,
         store_name: request.store_name,
         current_product_limit: request.current_product_limit,
-        current_start_date: request.current_start_date,
-        current_end_date: request.current_end_date,
+        current_start_date: this.normalizeDate(request.current_start_date),
+        current_end_date: this.normalizeDate(request.current_end_date),
         current_total_price: request.current_total_price,
         requested_product_limit: request.requested_product_limit,
-        requested_start_date: request.requested_start_date,
-        requested_end_date: request.requested_end_date,
+        requested_start_date: this.normalizeDate(request.requested_start_date),
+        requested_end_date: this.normalizeDate(request.requested_end_date),
         requested_total_price: request.requested_total_price,
         price_difference: request.price_difference,
         remaining_credit_value: request.remaining_credit_value,

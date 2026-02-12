@@ -193,16 +193,19 @@ export class PaymentController {
     isExpired: boolean;
     isExpiredBeyondGracePeriod: boolean;
     daysUntilExpiry: number;
-    expiryDate: Date;
+    expiryDate: string;
   }> {
     const payment = await this.paymentService.findOne(paymentId);
 
-    const isExpired = this.paymentService.isPlanExpired(payment.expiry_date);
+    // Convert ISO string to Date for comparison
+    const expiryDateObj = new Date(payment.expiry_date);
+
+    const isExpired = this.paymentService.isPlanExpired(expiryDateObj);
     const isExpiredBeyondGracePeriod =
-      this.paymentService.isExpiredBeyondGracePeriod(payment.expiry_date);
+      this.paymentService.isExpiredBeyondGracePeriod(expiryDateObj);
 
     const now = new Date();
-    const expiryTime = payment.expiry_date.getTime() - now.getTime();
+    const expiryTime = expiryDateObj.getTime() - now.getTime();
     const daysUntilExpiry = Math.ceil(expiryTime / (1000 * 60 * 60 * 24));
 
     return {

@@ -39,10 +39,10 @@ export class Payment {
   @Column({ type: 'timestamptz', nullable: true })
   payment_date?: Date;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'timestamptz' })
   start_date!: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   expiry_date?: Date;
 
   @Column({ type: 'text', nullable: true })
