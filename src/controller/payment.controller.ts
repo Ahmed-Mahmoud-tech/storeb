@@ -13,6 +13,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SkipAuth } from '../decorators/skip-auth.decorator';
 import { PaymentService } from '../services/payment.service';
 import {
   CreatePaymentDto,
@@ -96,6 +97,7 @@ export class PaymentController {
    * Accepts either store UUID or store name
    * Returns FULL payment object with all details
    */
+  @SkipAuth()
   @Get('active/:storeIdOrName')
   async getActivePayment(
     @Param('storeIdOrName') storeIdOrName: string
