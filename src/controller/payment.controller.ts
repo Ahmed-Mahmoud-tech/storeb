@@ -187,6 +187,53 @@ export class PaymentController {
   }
 
   /**
+   * Check plan expiry status by store name/ID
+   * GET /payments/expiry-status/store/:storeIdOrName
+   * PUBLIC ENDPOINT - accessible without auth
+   * Used by frontend to determine if store should show "Coming Soon" page
+   */
+  @SkipAuth()
+  @Get('expiry-status/store/:storeIdOrName')
+  async checkStoreExpiryStatus(
+    @Param('storeIdOrName') storeIdOrName: string
+  ): Promise<{
+    isExpired: boolean;
+    isExpiredBeyondGracePeriod: boolean;
+    daysUntilExpiry: number;
+    expiryDate: string | null;
+  }> {
+    const payment =
+      await this.paymentService.findActivePaymentByStore(storeIdOrName);
+
+    if (!payment || !payment.expiry_date) {
+      return {
+        isExpired: true,
+        isExpiredBeyondGracePeriod: true,
+        daysUntilExpiry: 0,
+        expiryDate: null,
+      };
+    }
+
+    // Convert ISO string to Date for comparison
+    const expiryDateObj = new Date(payment.expiry_date);
+
+    const isExpired = this.paymentService.isPlanExpired(expiryDateObj);
+    const isExpiredBeyondGracePeriod =
+      this.paymentService.isExpiredBeyondGracePeriod(expiryDateObj);
+
+    const now = new Date();
+    const expiryTime = expiryDateObj.getTime() - now.getTime();
+    const daysUntilExpiry = Math.ceil(expiryTime / (1000 * 60 * 60 * 24));
+
+    return {
+      isExpired,
+      isExpiredBeyondGracePeriod,
+      daysUntilExpiry,
+      expiryDate: payment.expiry_date,
+    };
+  }
+
+  /**
    * Check plan expiry status
    * GET /payments/:id/expiry-status
    */
