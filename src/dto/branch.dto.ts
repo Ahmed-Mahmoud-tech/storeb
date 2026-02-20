@@ -44,9 +44,10 @@ export class CreateBranchDto {
   @IsString()
   name: string;
 
+  @IsOptional()
   @ValidateNested()
   @Type(() => CoordinatesDto)
-  coordinates: CoordinatesDto;
+  coordinates?: CoordinatesDto;
 
   @IsArray()
   @ValidateNested({ each: true })
