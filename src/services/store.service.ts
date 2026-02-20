@@ -203,9 +203,9 @@ export class StoreService {
           id,
           storeId,
           branchDto.name,
-          branchDto.coordinates.address,
-          branchDto.coordinates.lat.toString(),
-          branchDto.coordinates.lng.toString(),
+          branchDto.coordinates?.address || null,
+          branchDto.coordinates?.lat?.toString() || null,
+          branchDto.coordinates?.lng?.toString() || null,
           branchDto.is_online ?? true,
           jsonPayload,
         ]
@@ -460,12 +460,18 @@ export class StoreService {
       if (updateData.coordinates) {
         if (updateData.coordinates?.address) {
           updateFields.address = updateData.coordinates.address;
+        } else {
+          updateFields.address = null;
         }
         if (updateData.coordinates?.lat) {
           updateFields.lat = updateData.coordinates.lat.toString();
+        } else {
+          updateFields.lat = null;
         }
         if (updateData.coordinates?.lng) {
           updateFields.lang = updateData.coordinates.lng.toString();
+        } else {
+          updateFields.lang = null;
         }
       }
 

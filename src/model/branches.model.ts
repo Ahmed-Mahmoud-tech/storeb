@@ -20,8 +20,8 @@ export class Branch {
   @Column({ type: 'varchar', length: 100, nullable: false })
   name!: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: false })
-  address!: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address?: string;
 
   @Column('jsonb', { nullable: true })
   customer_support?: Array<{
