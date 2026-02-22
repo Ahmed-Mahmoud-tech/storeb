@@ -7,6 +7,13 @@ import { join } from 'path';
 import * as fs from 'fs';
 import * as cookieParser from 'cookie-parser';
 
+// Enable periodic garbage collection
+if (global.gc) {
+  setInterval(() => {
+    global.gc();
+  }, 30000); // كل 30 ثانية
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'], // Enable logging
