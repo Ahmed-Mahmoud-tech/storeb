@@ -302,7 +302,7 @@ export class UserService {
       type: registerDto.type,
       phone: phoneData.phone,
       country_code: phoneData.country_code,
-      email_verified: false,
+      email_verified: true,
       verification_token: verificationToken,
       verification_token_expires: verificationExpires,
     });
